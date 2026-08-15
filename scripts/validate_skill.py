@@ -22,13 +22,22 @@ def main() -> None:
     ids = [case["id"] for case in cases]
     assert len(ids) == len(set(ids))
     for case in cases:
-        for key in ("resume", "job_description", "expected_supported_terms", "expected_unsupported_terms"):
+        for key in (
+            "resume",
+            "job_description",
+            "expected_supported_terms",
+            "expected_unsupported_terms",
+        ):
             assert key in case, (case["id"], key)
 
-    manifest = json.loads((ROOT / "examples/approved_changes.json").read_text(encoding="utf-8"))
+    manifest = json.loads(
+        (ROOT / "examples/approved_changes.json").read_text(encoding="utf-8")
+    )
     assert manifest["proposal"] == "proposal.json"
     assert manifest["selections"]
-    assert manifest["mode"] in {"preserve", "rebuild"}
+    document_mode = manifest.get("document_mode", manifest.get("mode"))
+    assert document_mode in {"preserve", "rebuild"}
+    assert manifest["output"].endswith((".txt", ".docx"))
     print(f"skill validation passed: {len(cases)} benchmark cases")
 
 
