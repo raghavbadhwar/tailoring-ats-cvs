@@ -15,6 +15,10 @@ from .rewriting import propose_supported_changes
 from .validation import validate_change
 
 
+def _absolute(path: Path) -> Path:
+    return path.expanduser().resolve()
+
+
 def _load_evidence_sources(paths: Iterable[Path]) -> list[EvidenceSource]:
     sources: list[EvidenceSource] = []
     for path in paths:
@@ -35,7 +39,9 @@ def build_proposal(
     evidence_paths: Iterable[Path] | None = None,
     candidate_id: str = "candidate",
 ) -> dict:
-    evidence_paths = list(evidence_paths or [])
+    resume = _absolute(resume)
+    job_description = _absolute(job_description)
+    evidence_paths = [_absolute(path) for path in (evidence_paths or [])]
     try:
         cv = load(resume)
         jd = load(job_description)
@@ -96,8 +102,8 @@ def _sha(path: Path) -> str:
 def _resolve_from(parent: Path, value: str | None) -> Path | None:
     if not value:
         return None
-    path = Path(value)
-    return path if path.is_absolute() else parent / path
+    path = Path(value).expanduser()
+    return path.resolve() if path.is_absolute() else (parent / path).resolve()
 
 
 def _ledger_from_proposal(proposal: dict) -> EvidenceLedger:
@@ -122,7 +128,7 @@ def _default_output(source: Path) -> Path:
 
 
 def apply_manifest(manifest_path: Path, approved: list[str]) -> dict:
-    manifest_path = manifest_path.resolve()
+    manifest_path = manifest_path.expanduser().resolve()
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     proposal_path = _resolve_from(manifest_path.parent, manifest.get("proposal"))
     proposal = (
@@ -157,7 +163,9 @@ def apply_manifest(manifest_path: Path, approved: list[str]) -> dict:
         change = changes[change_id]
         validate_change(change, ledger)
         if change.get("operation") not in {None, "replace", "replace_span"}:
-            raise ValueError(f"change {change_id} uses unsupported operation: {change.get('operation')}")
+            raise ValueError(
+                f"change {change_id} uses unsupported operation: {change.get('operation')}"
+            )
         expected = change.get("expected_text", change.get("from", ""))
         replacement = change.get("replacement_text", change.get("to", ""))
         matches = [i for i in range(len(text)) if text.startswith(expected, i)]
@@ -183,13 +191,19 @@ def apply_manifest(manifest_path: Path, approved: list[str]) -> dict:
         raise ValueError("approved changes produced no output change")
 
     output_value = manifest.get("output")
-    output = _resolve_from(manifest_path.parent, output_value) if output_value else _default_output(source)
+    output = (
+        _resolve_from(manifest_path.parent, output_value)
+        if output_value
+        else _default_output(source)
+    )
     if output is None:
         raise ValueError("could not determine output path")
     if output.resolve() == source.resolve():
         raise ValueError("output must not overwrite the source")
     if output.suffix.lower() == ".pdf":
-        raise ValueError("PDF output requires a genuine PDF renderer; choose DOCX or text output")
+        raise ValueError(
+            "PDF output requires a genuine PDF renderer; choose DOCX or text output"
+        )
 
     output.parent.mkdir(parents=True, exist_ok=True)
     if output.suffix.lower() == ".docx":
