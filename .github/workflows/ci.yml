@@ -56,6 +56,14 @@ jobs:
             --evidence examples/sample_project_bank.md \
             --candidate-id sample-candidate \
             --output "$run_dir/proposal.json"
+          ats-agent review "$run_dir/proposal.json" \
+            --markdown "$run_dir/review.md" \
+            --html "$run_dir/review.html" \
+            --output-document tailored-resume.txt
+          test -s "$run_dir/review.md"
+          test -s "$run_dir/review.html"
+          grep -q "Requirement-to-Evidence Matrix" "$run_dir/review.md"
+          grep -q "Download approval manifest" "$run_dir/review.html"
           cp examples/approved_changes.json "$run_dir/approved_changes.json"
           (
             cd "$run_dir"
