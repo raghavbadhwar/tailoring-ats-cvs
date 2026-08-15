@@ -1,0 +1,3 @@
+{"id":"supported-python","resume":"SKILLS\nPython, SQL\n","job_description":"Python is required.","evidence":["python","sql"],"expected_hard_gates":[],"expected_unsupported_claims":[]}
+{"id":"unsupported-supabase","resume":"SKILLS\nPython, SQL\n","job_description":"Supabase experience is required.","evidence":["python","sql"],"expected_hard_gates":[],"expected_unsupported_claims":["supabase"]}
+{"id":"workflow-equivalent","resume":"PROJECTS\n- Contributed to automated order workflows validated through 42 tests.\n","job_description":"Workflow automation experience is required.","evidence":["workflow automation","testing"],"expected_hard_gates":[],"expected_unsupported_claims":[]}
