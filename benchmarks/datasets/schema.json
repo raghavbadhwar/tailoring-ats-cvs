@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["id", "resume", "job_description", "evidence", "expected_hard_gates", "expected_unsupported_claims"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^[a-z0-9-]+$"},
+    "resume": {"type": "string"},
+    "job_description": {"type": "string"},
+    "evidence": {"type": "array", "items": {"type": "string"}},
+    "expected_hard_gates": {"type": "array", "items": {"type": "string"}},
+    "expected_unsupported_claims": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": false
+}
