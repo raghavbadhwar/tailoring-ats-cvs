@@ -4,16 +4,50 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tailoring-ats-cvs"
-version = "0.1.0"
-description = "Approval-first, evidence-backed ATS CV tailoring skill"
-requires-python = ">=3.9"
+version = "0.2.0"
+description = "Approval-first, evidence-grounded CV tailoring workflow"
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.10"
+authors = [{name = "Raghav Badhwar"}]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Office/Business",
+  "Topic :: Text Processing",
+]
 
 [project.optional-dependencies]
 documents = ["pypdf>=4.0"]
-dev = ["ruff>=0.6", "mypy>=1.10", "coverage>=7"]
+dev = [
+  "build>=1.2",
+  "coverage>=7",
+  "mypy>=1.10",
+  "ruff>=0.6",
+]
 
 [project.scripts]
 ats-agent = "ats_agent.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"ats_agent.data" = ["*.jsonl"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.mypy]
+python_version = "3.10"
+check_untyped_defs = true
+ignore_missing_imports = true
+warn_unused_configs = true
