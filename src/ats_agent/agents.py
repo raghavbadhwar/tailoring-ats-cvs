@@ -6,7 +6,6 @@ wording later, but it cannot bypass the evidence and approval contract.
 from __future__ import annotations
 
 import re
-from collections import Counter
 
 TERMS = {
     "technical": ("python", "typescript", "javascript", "sql", "api", "react", "postgres", "testing"),
@@ -69,25 +68,25 @@ def language(cv: str) -> dict:
         if phrase in body:
             findings.append({"type": "weak-verb", "phrase": phrase, "suggestion": "use the strongest truthful ownership verb"})
     bullets = [line for line in str(cv).splitlines() if re.match(r"^\s*[-*•]", line)]
-    quantified = sum(bool(re.search(r"\d|%|tests?|users?|records?|github|https?://", line, re.I)) for line in bullets)
+    quantified = sum(bool(re.search(r"\d|%|tests?|users?|records?|github|https?://", line, re.IGNORECASE)) for line in bullets)
     return {"agent": "language-optimization", "findings": findings, "bullet_count": len(bullets), "quantified_bullets": quantified}
 
 
 def recruiter(cv: str, jd: str) -> dict:
     first = " ".join(str(cv).splitlines()[:12])
-    score = round(min(100, (25 if re.search(r"summary|profile", first, re.I) else 0) + (25 if re.search(r"ai|product|engineer|analyst|strategy", first, re.I) else 0) + keywords(cv, jd)["coverage"] * 50))
+    score = round(min(100, (25 if re.search(r"summary|profile", first, re.IGNORECASE) else 0) + (25 if re.search(r"ai|product|engineer|analyst|strategy", first, re.IGNORECASE) else 0) + keywords(cv, jd)["coverage"] * 50))
     return {"agent": "recruiter-simulation", "score": score, "decision": "interview" if score >= 65 else "unclear"}
 
 
 def hiring_manager(cv: str, jd: str) -> dict:
     claims = [line.strip(" -*•") for line in str(cv).splitlines() if re.match(r"^\s*[-*•]", line)]
-    questions = [{"claim": claim, "question": f"How did you validate this claim: {claim}"} for claim in claims if re.search(r"built|designed|architect|led|launched|owned|developed", claim, re.I)]
+    questions = [{"claim": claim, "question": f"How did you validate this claim: {claim}"} for claim in claims if re.search(r"built|designed|architect|led|launched|owned|developed", claim, re.IGNORECASE)]
     return {"agent": "hiring-manager", "credibility": "review-needed" if questions else "low-signal", "questions": questions[:8], "hard_requirements": [r["term"] for r in jd_intelligence(jd)["requirements"] if r["hard"]]}
 
 
 def evidence(cv: str) -> dict:
     claims = [line.strip(" -*•") for line in str(cv).splitlines() if re.match(r"^\s*[-*•]", line)]
-    rows = [{"claim": claim, "has_evidence": bool(re.search(r"\d|%|tests?|users?|records?|github|https?://", claim, re.I))} for claim in claims]
+    rows = [{"id": f"E{index}", "claim": claim, "has_evidence": bool(re.search(r"\d|%|tests?|users?|records?|github|https?://", claim, re.IGNORECASE)), "source_span": f"resume bullet {index}"} for index, claim in enumerate(claims, 1)]
     return {"agent": "evidence-achievement", "claims": rows, "source_of_truth": "candidate-provided CV and profile only"}
 
 
@@ -101,8 +100,14 @@ def career_report(cv: str, jd: str) -> dict:
 def proposals(cv: str, jd: str, report: dict) -> list[dict]:
     changes = []
     for index, finding in enumerate(report["agents"]["language"]["findings"], 1):
-        changes.append({"id": f"C{index}", "kind": finding["type"], "from": finding["phrase"], "to": "[rewrite with verified evidence]", "reason": finding["suggestion"], "evidence": False})
+        row = next((item for item in report["agents"]["evidence"]["claims"] if finding["phrase"] in item["claim"].lower()), None)
+        words = row["claim"].split() if row else []
+        position = next((i for i, part in enumerate(words) if part.lower() == finding["phrase"]), None)
+        expected = " ".join(words[position:position + 2]) if position is not None and finding["phrase"] in WEAK and position + 1 < len(words) else (words[position] if position is not None else "")
+        supported = bool(row and row["has_evidence"] and expected)
+        replacement = {"helped": "Built", "worked on": "Built", "assisted": "Built", "participated in": "Contributed to", "responsible for": "Owned"}.get(finding["phrase"], "Built")
+        changes.append({"id": f"C{index}", "kind": finding["type"], "expected_text": expected, "replacement_text": replacement if supported else "", "evidence_ids": [row["id"]] if supported else [], "supported": supported, "reason": finding["suggestion"]})
     for req in report["agents"]["keywords"]["rows"]:
         if not req["covered"]:
-            changes.append({"id": f"C{len(changes) + 1}", "kind": "keyword-gap", "from": "", "to": req["term"], "reason": "required terminology is absent", "evidence": False})
+            changes.append({"id": f"C{len(changes) + 1}", "kind": "keyword-gap", "expected_text": "", "replacement_text": req["term"], "evidence_ids": [], "supported": False, "reason": "required terminology is absent; add only when candidate evidence supports it"})
     return changes

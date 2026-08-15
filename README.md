@@ -12,7 +12,7 @@ python -m src.ats_agent.cli apply approved_changes.json
 python -m src.ats_agent.cli benchmark
 ```
 
-The pipeline validates inputs, runs named deterministic review agents, and writes an auditable JSON proposal. It never invents evidence and never edits the source CV. PDF/DOCX extraction adapters remain separate extension points.
+The pipeline validates inputs, runs named deterministic review agents, and writes an auditable JSON proposal. It never invents evidence and never edits the source CV. TXT/Markdown/RTF/HTML use the standard library; DOCX uses its OOXML container; PDF analysis is blocked unless the optional `pypdf` adapter is installed. Unsupported or stale proposals stop before writing, and APPLY emits a new output plus diff and applied-change log.
 
 The report stages are: ATS parsing, JD intelligence, keyword strategy, language optimization, recruiter simulation, hiring-manager review, evidence/achievement audit, company-language alignment, interview defense, approval, editor, and final validation.
 
