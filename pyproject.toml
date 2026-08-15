@@ -8,6 +8,10 @@ version = "0.1.0"
 description = "Approval-first, evidence-backed ATS CV tailoring skill"
 requires-python = ">=3.9"
 
+[project.optional-dependencies]
+documents = ["pypdf>=4.0"]
+dev = ["ruff>=0.6", "mypy>=1.10", "coverage>=7"]
+
 [project.scripts]
 ats-agent = "ats_agent.cli:main"
 

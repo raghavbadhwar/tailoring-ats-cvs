@@ -6,11 +6,15 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+from ats_agent.ingestion import write_docx
+from ats_agent.workflow import apply_manifest
 
 
 class CliTests(unittest.TestCase):
     def run_cli(self, *args):
-        return subprocess.run([sys.executable, "-m", "src.ats_agent.cli", *args], cwd=ROOT, text=True, capture_output=True)
+        return subprocess.run([sys.executable, "-m", "src.ats_agent.cli", *args], cwd=ROOT, text=True, capture_output=True, check=False)
 
     def test_audit_validates_paths(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -51,6 +55,41 @@ class CliTests(unittest.TestCase):
             self.assertIn("ats", payload["report"]["agents"])
             self.assertIn("hiring_manager", payload["report"]["agents"])
             self.assertEqual(resume.read_text(encoding="utf-8"), before)
+
+    def test_apply_exact_supported_change_and_log(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "resume.txt"
+            source.write_text("SUMMARY\nBuilt Python workflows.\n", encoding="utf-8")
+            proposal = root / "proposal.json"
+            from hashlib import sha256
+            proposal.write_text(json.dumps({"status": "draft", "source": str(source), "source_sha256": sha256(source.read_bytes()).hexdigest(), "changes": [{"id": "C1", "supported": True, "evidence_ids": ["E1"], "expected_text": "Built", "replacement_text": "Designed"}]}), encoding="utf-8")
+            manifest = root / "approved.json"
+            manifest.write_text(json.dumps({"proposal": str(proposal), "output": str(root / "final.txt")}), encoding="utf-8")
+            result = apply_manifest(manifest, ["C1"])
+            self.assertEqual((root / "final.txt").read_text(encoding="utf-8"), "SUMMARY\nDesigned Python workflows.\n")
+            self.assertTrue((root / "final.txt.applied.json").exists())
+            self.assertEqual(result["approved_change_ids"], ["C1"])
+
+    def test_apply_rejects_stale_and_ambiguous_changes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "resume.txt"
+            source.write_text("Built Built", encoding="utf-8")
+            proposal = root / "proposal.json"
+            proposal.write_text(json.dumps({"source": str(source), "source_sha256": "stale", "changes": []}), encoding="utf-8")
+            manifest = root / "approved.json"
+            manifest.write_text(json.dumps({"proposal": str(proposal)}), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "stale proposal"):
+                apply_manifest(manifest, [])
+
+    def test_docx_round_trip_is_extractable_and_non_overwriting(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "resume.docx"
+            write_docx(path, "SUMMARY\nBuilt Python workflows.")
+            result = self.run_cli("propose", str(path), str(path))
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(json.loads(result.stdout)["status"], "draft")
 
 
 if __name__ == "__main__":

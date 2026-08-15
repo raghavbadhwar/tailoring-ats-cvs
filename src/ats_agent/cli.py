@@ -4,9 +4,9 @@ import argparse
 import json
 from pathlib import Path
 
+from .benchmark import run as run_benchmark
 from .formatting import audit_file
 from .workflow import apply_manifest, build_proposal
-from .benchmark import run as run_benchmark
 
 
 def _existing(path: str) -> str:
@@ -42,7 +42,8 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(result, indent=2 if args.json else None))
     elif args.command == "audit":
         proposal = build_proposal(Path(args.resume), Path(args.job_description))
-        proposal["status"] = "ready"
+        if proposal.get("status") == "draft":
+            proposal["status"] = "ready"
         print(json.dumps(proposal, indent=2))
     elif args.command == "propose":
         proposal = build_proposal(Path(args.resume), Path(args.job_description))
@@ -57,7 +58,10 @@ def main(argv: list[str] | None = None) -> int:
         if not isinstance(approved, list) or not all(isinstance(item, str) for item in approved):
             raise SystemExit("approved_changes.json must contain approved_change_ids: [string, ...]")
         if isinstance(data, dict) and (data.get("proposal") or data.get("source")):
-            print(json.dumps(apply_manifest(Path(args.approved_changes), approved), indent=2))
+            try:
+                print(json.dumps(apply_manifest(Path(args.approved_changes), approved), indent=2))
+            except ValueError as exc:
+                raise SystemExit(f"apply blocked: {exc}") from exc
         else:
             print(json.dumps({"status": "validated", "approved_change_ids": approved, "source_overwrite": False}))
     return 0
