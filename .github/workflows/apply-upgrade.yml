@@ -41,6 +41,9 @@ jobs:
           lines = path.read_text(encoding="utf-8").splitlines()
           path.write_text("\n".join(line.rstrip() for line in lines) + "\n", encoding="utf-8")
           PY
+          # GitHub Actions tokens cannot update workflow files. Retain the reviewed
+          # workflow definitions in the diagnostic branch and publish product code only.
+          git checkout HEAD -- .github/workflows/ci.yml .github/workflows/apply-upgrade.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B agent/9of10-payload-debug
