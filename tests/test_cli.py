@@ -3,6 +3,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from hashlib import sha256
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,7 +15,13 @@ from ats_agent.workflow import apply_manifest
 
 class CliTests(unittest.TestCase):
     def run_cli(self, *args):
-        return subprocess.run([sys.executable, "-m", "src.ats_agent.cli", *args], cwd=ROOT, text=True, capture_output=True, check=False)
+        return subprocess.run(
+            [sys.executable, "-m", "src.ats_agent.cli", *args],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
 
     def test_audit_validates_paths(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -45,8 +52,14 @@ class CliTests(unittest.TestCase):
     def test_propose_emits_named_agent_report_without_editing_source(self):
         with tempfile.TemporaryDirectory() as directory:
             resume, job = Path(directory) / "resume.txt", Path(directory) / "job.md"
-            resume.write_text("SUMMARY\n2026\n- Built Python workflow automation with 42 tests.\n", encoding="utf-8")
-            job.write_text("Required Python and workflow automation for AI agents.", encoding="utf-8")
+            resume.write_text(
+                "SUMMARY\n2026\n- Built Python workflow automation with 42 tests.\n",
+                encoding="utf-8",
+            )
+            job.write_text(
+                "Required Python and workflow automation for AI agents.",
+                encoding="utf-8",
+            )
             before = resume.read_text(encoding="utf-8")
             result = self.run_cli("propose", str(resume), str(job))
             payload = json.loads(result.stdout)
@@ -54,6 +67,8 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["status"], "draft")
             self.assertIn("ats", payload["report"]["agents"])
             self.assertIn("hiring_manager", payload["report"]["agents"])
+            self.assertTrue(payload["evidence_ledger"])
+            self.assertTrue(payload["requirement_evidence"])
             self.assertEqual(resume.read_text(encoding="utf-8"), before)
 
     def test_apply_exact_supported_change_and_log(self):
@@ -62,22 +77,71 @@ class CliTests(unittest.TestCase):
             source = root / "resume.txt"
             source.write_text("SUMMARY\nBuilt Python workflows.\n", encoding="utf-8")
             proposal = root / "proposal.json"
-            from hashlib import sha256
-            proposal.write_text(json.dumps({"status": "draft", "source": str(source), "source_sha256": sha256(source.read_bytes()).hexdigest(), "changes": [{"id": "C1", "supported": True, "evidence_ids": ["E1"], "expected_text": "Built", "replacement_text": "Designed"}]}), encoding="utf-8")
+            proposal.write_text(
+                json.dumps(
+                    {
+                        "status": "draft",
+                        "candidate_id": "candidate-a",
+                        "source": str(source),
+                        "source_sha256": sha256(source.read_bytes()).hexdigest(),
+                        "evidence_ledger": [
+                            {
+                                "id": "E1",
+                                "candidate_id": "candidate-a",
+                                "text": "Built Python workflows.",
+                                "source": "resume",
+                                "source_file": str(source),
+                                "source_span": "line 2",
+                                "line_number": 2,
+                                "ownership": "direct",
+                                "confidence": "high",
+                            }
+                        ],
+                        "changes": [
+                            {
+                                "id": "C1",
+                                "operation": "replace_span",
+                                "supported": True,
+                                "evidence_ids": ["E1"],
+                                "expected_text": "Built",
+                                "replacement_text": "Designed",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
             manifest = root / "approved.json"
-            manifest.write_text(json.dumps({"proposal": str(proposal), "output": str(root / "final.txt")}), encoding="utf-8")
+            manifest.write_text(
+                json.dumps({"proposal": str(proposal), "output": str(root / "final.txt")}),
+                encoding="utf-8",
+            )
             result = apply_manifest(manifest, ["C1"])
-            self.assertEqual((root / "final.txt").read_text(encoding="utf-8"), "SUMMARY\nDesigned Python workflows.\n")
+            self.assertEqual(
+                (root / "final.txt").read_text(encoding="utf-8"),
+                "SUMMARY\nDesigned Python workflows.\n",
+            )
             self.assertTrue((root / "final.txt.applied.json").exists())
             self.assertEqual(result["approved_change_ids"], ["C1"])
+            self.assertEqual(result["validation"]["status"], "audited")
 
-    def test_apply_rejects_stale_and_ambiguous_changes(self):
+    def test_apply_rejects_stale_change(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / "resume.txt"
             source.write_text("Built Built", encoding="utf-8")
             proposal = root / "proposal.json"
-            proposal.write_text(json.dumps({"source": str(source), "source_sha256": "stale", "changes": []}), encoding="utf-8")
+            proposal.write_text(
+                json.dumps(
+                    {
+                        "source": str(source),
+                        "source_sha256": "stale",
+                        "evidence_ledger": [],
+                        "changes": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
             manifest = root / "approved.json"
             manifest.write_text(json.dumps({"proposal": str(proposal)}), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "stale proposal"):
