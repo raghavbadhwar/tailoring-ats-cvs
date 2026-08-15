@@ -1,16 +1,14 @@
-"""Candidate-specific evidence records and ownership protection.
-
-The evidence ledger is the only source from which supported rewrite claims may
-be constructed. A job description is never added to this ledger.
-"""
+"""Candidate-scoped evidence ledger and ownership protection."""
 from __future__ import annotations
 
 import hashlib
 import re
-from dataclasses import asdict, dataclass
-from typing import Iterable, Literal
+from dataclasses import asdict, dataclass, field
+from typing import Iterable, Literal, Mapping, Sequence, cast
 
 Ownership = Literal["observed", "contributor", "direct", "lead", "owner"]
+Confidence = Literal["low", "medium", "high"]
+Verification = Literal["candidate_supplied", "source_verified", "unverified"]
 
 OWNERSHIP_RANK: dict[str, int] = {
     "observed": 0,
@@ -20,11 +18,37 @@ OWNERSHIP_RANK: dict[str, int] = {
     "owner": 4,
 }
 
-COMPACT_EVIDENCE = re.compile(
+SKILL_SIGNAL = re.compile(
     r"\b(?:python|sql|typescript|javascript|react|next(?:\.?js)?|postgres(?:ql)?|"
-    r"supabase|api|excel|git|github|playwright|pydantic|fastify|figma|canva)\b",
+    r"supabase|api|excel|git|github|playwright|pydantic|fastify|figma|canva|"
+    r"power\s*bi|tableau|docker|kubernetes|aws|azure|gcp|rag|llm|mcp)\b",
     re.IGNORECASE,
 )
+
+
+@dataclass(frozen=True)
+class SourceFragment:
+    part: str
+    paragraph_index: int | None
+    line_number: int | None
+    text: str
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, object]) -> "SourceFragment":
+        return cls(
+            part=str(value.get("part") or "text"),
+            paragraph_index=(
+                int(value["paragraph_index"])
+                if value.get("paragraph_index") is not None
+                else None
+            ),
+            line_number=(
+                int(value["line_number"])
+                if value.get("line_number") is not None
+                else None
+            ),
+            text=str(value.get("text") or ""),
+        )
 
 
 @dataclass(frozen=True)
@@ -32,6 +56,9 @@ class EvidenceSource:
     source: str
     source_file: str
     text: str
+    fragments: tuple[SourceFragment, ...] = ()
+    verification_status: Verification = "candidate_supplied"
+    candidate_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -42,12 +69,50 @@ class EvidenceItem:
     source: str
     source_file: str
     source_span: str
-    line_number: int
+    line_number: int | None
+    paragraph_index: int | None
+    part: str
     ownership: Ownership
-    confidence: Literal["low", "medium", "high"] = "medium"
+    confidence: Confidence = "medium"
+    verification_status: Verification = "candidate_supplied"
+    fact_types: tuple[str, ...] = field(default_factory=tuple)
+    source_sha256: str = ""
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        value = asdict(self)
+        value["fact_types"] = list(self.fact_types)
+        return value
+
+    @classmethod
+    def from_dict(cls, value: Mapping[str, object]) -> "EvidenceItem":
+        fact_types = value.get("fact_types") or ()
+        return cls(
+            id=str(value["id"]),
+            candidate_id=str(value["candidate_id"]),
+            text=str(value["text"]),
+            source=str(value["source"]),
+            source_file=str(value["source_file"]),
+            source_span=str(value.get("source_span") or ""),
+            line_number=(
+                int(value["line_number"])
+                if value.get("line_number") is not None
+                else None
+            ),
+            paragraph_index=(
+                int(value["paragraph_index"])
+                if value.get("paragraph_index") is not None
+                else None
+            ),
+            part=str(value.get("part") or "text"),
+            ownership=cast(Ownership, str(value.get("ownership") or "observed")),
+            confidence=cast(Confidence, str(value.get("confidence") or "medium")),
+            verification_status=cast(
+                Verification,
+                str(value.get("verification_status") or "candidate_supplied"),
+            ),
+            fact_types=tuple(str(item) for item in fact_types),
+            source_sha256=str(value.get("source_sha256") or ""),
+        )
 
 
 @dataclass(frozen=True)
@@ -56,6 +121,8 @@ class EvidenceLedger:
     items: tuple[EvidenceItem, ...]
 
     def __post_init__(self) -> None:
+        if not self.candidate_id.strip():
+            raise ValueError("candidate_id is required")
         mismatched = [item.id for item in self.items if item.candidate_id != self.candidate_id]
         if mismatched:
             raise ValueError(
@@ -79,6 +146,14 @@ class EvidenceLedger:
     def to_dicts(self) -> list[dict]:
         return [item.to_dict() for item in self.items]
 
+    @classmethod
+    def from_dicts(
+        cls,
+        candidate_id: str,
+        records: Sequence[Mapping[str, object]],
+    ) -> "EvidenceLedger":
+        return cls(candidate_id=candidate_id, items=tuple(EvidenceItem.from_dict(r) for r in records))
+
 
 def detect_ownership(text: str) -> Ownership:
     body = text.lower()
@@ -95,40 +170,107 @@ def detect_ownership(text: str) -> Ownership:
     ):
         return "contributor"
     if re.search(
-        r"\b(built|designed|developed|created|implemented|engineered|validated|analysed|analyzed)\b",
+        r"\b(built|designed|developed|created|implemented|engineered|validated|"
+        r"analysed|analyzed|delivered|launched)\b",
         body,
     ):
         return "direct"
     return "observed"
 
 
+def ownership_rank(value: str) -> int:
+    try:
+        return OWNERSHIP_RANK[value]
+    except KeyError as exc:
+        raise ValueError(f"unknown ownership level: {value}") from exc
+
+
 def _is_heading(line: str) -> bool:
     stripped = line.strip().rstrip(":")
-    if stripped.startswith("#"):
-        return True
-    return bool(stripped) and stripped.upper() == stripped and len(stripped.split()) <= 6
+    standard = {
+        "summary",
+        "profile",
+        "education",
+        "experience",
+        "projects",
+        "skills",
+        "certifications",
+        "leadership",
+        "achievements",
+    }
+    return stripped.lower() in standard or (
+        bool(stripped)
+        and stripped.upper() == stripped
+        and len(stripped.split()) <= 6
+        and not SKILL_SIGNAL.search(stripped)
+    )
 
 
 def _is_compact_evidence(claim: str) -> bool:
-    return bool(COMPACT_EVIDENCE.search(claim)) or "," in claim or "/" in claim
+    return bool(SKILL_SIGNAL.search(claim)) or "," in claim or "/" in claim
 
 
-def _claim_lines(text: str) -> list[tuple[int, str]]:
-    claims: list[tuple[int, str]] = []
-    for line_number, raw in enumerate(text.splitlines(), 1):
-        stripped = raw.strip()
+def _fact_types(text: str) -> tuple[str, ...]:
+    kinds: set[str] = set()
+    if SKILL_SIGNAL.search(text):
+        kinds.add("skill")
+    if re.search(r"\b(?:19|20)\d{2}\b", text):
+        kinds.add("date")
+    if re.search(r"(?<![A-Za-z])\d+(?:[.,]\d+)?%?", text):
+        kinds.add("metric")
+    if re.search(r"\b(?:bachelor|master|b\.?com|b\.?tech|mba|degree|diploma)\b", text, re.I):
+        kinds.add("qualification")
+    if re.search(r"\b(?:production|deployed|live|prototype|mvp|customer|user|revenue)\b", text, re.I):
+        kinds.add("status")
+    if detect_ownership(text) != "observed":
+        kinds.add("ownership")
+    return tuple(sorted(kinds or {"narrative"}))
+
+
+def _fallback_fragments(text: str) -> tuple[SourceFragment, ...]:
+    fragments: list[SourceFragment] = []
+    for line_number, line in enumerate(text.splitlines(), 1):
+        if line.strip():
+            fragments.append(
+                SourceFragment(
+                    part="text",
+                    paragraph_index=None,
+                    line_number=line_number,
+                    text=line,
+                )
+            )
+    return tuple(fragments)
+
+
+def _claim_fragments(source: EvidenceSource) -> list[SourceFragment]:
+    claims: list[SourceFragment] = []
+    for fragment in source.fragments or _fallback_fragments(source.text):
+        stripped = fragment.text.strip()
         if not stripped or _is_heading(stripped):
             continue
         claim = re.sub(r"^\s*[-*•▪◦]\s*", "", stripped).strip()
         if len(claim.split()) < 3 and not _is_compact_evidence(claim):
             continue
-        claims.append((line_number, claim))
+        claims.append(
+            SourceFragment(
+                part=fragment.part,
+                paragraph_index=fragment.paragraph_index,
+                line_number=fragment.line_number,
+                text=claim,
+            )
+        )
     return claims
 
 
-def _evidence_id(candidate_id: str, source_file: str, line_number: int, text: str) -> str:
-    payload = f"{candidate_id}\x00{source_file}\x00{line_number}\x00{text}".encode("utf-8")
-    return "E" + hashlib.sha256(payload).hexdigest()[:12].upper()
+def _evidence_id(
+    candidate_id: str,
+    source_file: str,
+    part: str,
+    position: int | None,
+    text: str,
+) -> str:
+    payload = f"{candidate_id}\x00{source_file}\x00{part}\x00{position}\x00{text}".encode("utf-8")
+    return "E" + hashlib.sha256(payload).hexdigest()[:14].upper()
 
 
 def build_evidence_ledger(
@@ -138,31 +280,51 @@ def build_evidence_ledger(
     if not candidate_id.strip():
         raise ValueError("candidate_id is required")
     items: list[EvidenceItem] = []
-    seen: set[tuple[str, str]] = set()
+    seen: set[tuple[str, str, str]] = set()
     for source in sources:
-        for line_number, claim in _claim_lines(source.text):
-            identity = (source.source_file, claim)
+        if source.candidate_id and source.candidate_id != candidate_id:
+            raise ValueError(
+                f"candidate identity mismatch in source {source.source_file}: "
+                f"{source.candidate_id} != {candidate_id}"
+            )
+        source_hash = hashlib.sha256(source.text.encode("utf-8")).hexdigest()
+        for fragment in _claim_fragments(source):
+            identity = (source.source_file, fragment.part, fragment.text)
             if identity in seen:
                 continue
             seen.add(identity)
+            position = (
+                fragment.paragraph_index
+                if fragment.paragraph_index is not None
+                else fragment.line_number
+            )
+            span = (
+                f"{fragment.part} paragraph {fragment.paragraph_index}"
+                if fragment.paragraph_index is not None
+                else f"line {fragment.line_number}"
+            )
             items.append(
                 EvidenceItem(
-                    id=_evidence_id(candidate_id, source.source_file, line_number, claim),
+                    id=_evidence_id(
+                        candidate_id,
+                        source.source_file,
+                        fragment.part,
+                        position,
+                        fragment.text,
+                    ),
                     candidate_id=candidate_id,
-                    text=claim,
+                    text=fragment.text,
                     source=source.source,
                     source_file=source.source_file,
-                    source_span=f"line {line_number}",
-                    line_number=line_number,
-                    ownership=detect_ownership(claim),
+                    source_span=span,
+                    line_number=fragment.line_number,
+                    paragraph_index=fragment.paragraph_index,
+                    part=fragment.part,
+                    ownership=detect_ownership(fragment.text),
                     confidence="high" if source.source == "resume" else "medium",
+                    verification_status=source.verification_status,
+                    fact_types=_fact_types(fragment.text),
+                    source_sha256=source_hash,
                 )
             )
     return EvidenceLedger(candidate_id=candidate_id, items=tuple(items))
-
-
-def ownership_rank(value: str) -> int:
-    try:
-        return OWNERSHIP_RANK[value]
-    except KeyError as exc:
-        raise ValueError(f"unknown ownership level: {value}") from exc

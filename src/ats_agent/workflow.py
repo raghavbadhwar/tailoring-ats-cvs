@@ -1,37 +1,37 @@
+"""PROPOSE → APPROVE → APPLY workflow with provenance and document validation."""
 from __future__ import annotations
 
 import difflib
 import hashlib
 import json
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Iterable
 
 from .agents import career_report
-from .docx_patch import patch_docx
-from .evidence import EvidenceItem, EvidenceLedger, EvidenceSource, build_evidence_ledger
+from .documents import patch_document
+from .evidence import EvidenceLedger, EvidenceSource, SourceFragment, build_evidence_ledger
 from .formatting import audit_file, audit_text
-from .ingestion import ExtractionError, load, write_docx
-from .requirements import extract_requirements, map_requirements
+from .ingestion import ExtractionError, load
+from .requirements import evaluate_hard_gates, extract_requirements, map_requirements
 from .rewriting import propose_supported_changes
 from .validation import validate_change
+
+SCHEMA_VERSION = 4
 
 
 def _absolute(path: Path) -> Path:
     return path.expanduser().resolve()
 
 
-def _load_evidence_sources(paths: Iterable[Path]) -> list[EvidenceSource]:
-    sources: list[EvidenceSource] = []
-    for path in paths:
-        loaded = load(path)
-        sources.append(
-            EvidenceSource(
-                source="supporting",
-                source_file=str(path),
-                text=loaded["text"],
-            )
-        )
-    return sources
+def _source_from_loaded(source: str, loaded: dict, candidate_id: str) -> EvidenceSource:
+    return EvidenceSource(
+        source=source,
+        source_file=loaded["path"],
+        text=loaded["body_text"],
+        fragments=tuple(SourceFragment.from_mapping(fragment) for fragment in loaded["paragraphs"] if fragment["part"] == "text" or fragment["part"] == "word/document.xml"),
+        verification_status="candidate_supplied",
+        candidate_id=candidate_id,
+    )
 
 
 def build_proposal(
@@ -39,24 +39,21 @@ def build_proposal(
     job_description: Path,
     evidence_paths: Iterable[Path] | None = None,
     candidate_id: str = "candidate",
-) -> dict[str, Any]:
+    company_context: Path | None = None,
+) -> dict:
     resume = _absolute(resume)
     job_description = _absolute(job_description)
     evidence_paths = [_absolute(path) for path in (evidence_paths or [])]
     try:
         cv = load(resume)
         jd = load(job_description)
-        sources = [
-            EvidenceSource(
-                source="resume",
-                source_file=str(resume),
-                text=cv["text"],
-            ),
-            *_load_evidence_sources(evidence_paths),
-        ]
-    except ExtractionError as exc:
+        sources = [_source_from_loaded("resume", cv, candidate_id)]
+        for path in evidence_paths:
+            sources.append(_source_from_loaded("supporting", load(path), candidate_id))
+        company = load(_absolute(company_context)) if company_context else None
+    except (ExtractionError, OSError) as exc:
         return {
-            "schema_version": 3,
+            "schema_version": SCHEMA_VERSION,
             "status": "blocked",
             "reason": str(exc),
             "source": str(resume),
@@ -65,34 +62,44 @@ def build_proposal(
 
     ledger = build_evidence_ledger(candidate_id, sources)
     requirements = extract_requirements(jd["text"])
-    requirement_evidence = map_requirements(requirements, ledger)
-    changes = propose_supported_changes(
-        cv["text"],
-        requirements,
-        requirement_evidence,
-        ledger,
+    mappings = map_requirements(requirements, ledger)
+    hard_gates = evaluate_hard_gates(requirements, ledger)
+    changes = propose_supported_changes(cv["body_text"], requirements, mappings, ledger)
+    report = career_report(
+        cv["body_text"],
+        jd["text"],
+        ledger=ledger,
+        requirements=requirements,
+        mappings=mappings,
+        hard_gates=hard_gates,
     )
-    report = career_report(cv["text"], jd["text"])
-    report["evidence_summary"] = {
-        "candidate_id": candidate_id,
-        "items": len(ledger.items),
-        "supporting_files": [str(path) for path in evidence_paths],
-    }
+    if company:
+        report["agents"]["company_alignment"] = {
+            "agent": "company-language-alignment",
+            "source_status": "user-supplied-official-context",
+            "source_file": company["path"],
+            "vocabulary": sorted(set(company["text"].lower().split()))[:100],
+            "note": "Company terminology may only be used when supported by candidate evidence.",
+        }
 
     return {
-        "schema_version": 3,
+        "schema_version": SCHEMA_VERSION,
         "status": "draft",
         "candidate_id": candidate_id,
         "source": str(resume),
+        "source_format": cv["format"],
         "job_description": str(job_description),
         "source_sha256": cv["sha256"],
         "job_description_sha256": jd["sha256"],
+        "evidence_files": [str(path) for path in evidence_paths],
         "evidence_ledger": ledger.to_dicts(),
         "requirements": requirements,
-        "requirement_evidence": requirement_evidence,
+        "requirement_evidence": mappings,
+        "hard_gates": hard_gates,
         "changes": changes,
         "report": report,
         "formatting": audit_file(str(resume)),
+        "input_diagnostics": {"resume": cv["quality"], "job_description": jd["quality"]},
     }
 
 
@@ -107,180 +114,149 @@ def _resolve_from(parent: Path, value: str | None) -> Path | None:
     return path.resolve() if path.is_absolute() else (parent / path).resolve()
 
 
-def _ledger_from_proposal(proposal: dict[str, Any]) -> EvidenceLedger:
+def _ledger_from_proposal(proposal: dict) -> EvidenceLedger:
     records = proposal.get("evidence_ledger")
     if not isinstance(records, list):
         raise ValueError("proposal has no evidence ledger")
-    items: list[EvidenceItem] = []
-    for record in records:
-        try:
-            items.append(EvidenceItem(**record))
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"invalid evidence record: {record!r}") from exc
-    return EvidenceLedger(
-        candidate_id=str(proposal.get("candidate_id") or "candidate"),
-        items=tuple(items),
-    )
+    return EvidenceLedger.from_dicts(str(proposal.get("candidate_id") or "candidate"), records)
 
 
 def _default_output(source: Path) -> Path:
-    suffix = source.suffix or ".txt"
+    suffix = source.suffix.lower()
+    if suffix == ".pdf":
+        suffix = ".docx"
+    elif not suffix:
+        suffix = ".txt"
     return source.with_name(f"{source.stem}.tailored{suffix}")
 
 
-def _write_output(
-    source: Path,
-    output: Path,
-    text: str,
-    applied: list[dict[str, Any]],
-    requested_mode: str | None,
-) -> str:
-    source_suffix = source.suffix.lower()
-    output_suffix = output.suffix.lower()
-    mode = (requested_mode or "").strip().lower()
-
-    if output_suffix == ".pdf":
-        raise ValueError(
-            "PDF output requires a genuine PDF renderer; choose DOCX or text output"
-        )
-    if mode not in {"", "preserve", "rebuild", "text"}:
-        raise ValueError(f"unknown document_mode: {requested_mode}")
-    if mode == "preserve" and not (
-        source_suffix == ".docx" and output_suffix == ".docx"
-    ):
-        raise ValueError("preserve mode requires DOCX input and DOCX output")
-
-    output.parent.mkdir(parents=True, exist_ok=True)
-    if source_suffix == ".docx" and output_suffix == ".docx" and mode != "rebuild":
-        patch_docx(source, output, applied)
-        return "preserve"
-    if output_suffix == ".docx":
-        write_docx(output, text)
-        return "rebuild"
-
-    output.write_text(text, encoding="utf-8")
-    return "text"
+def _selections(manifest: dict, approved: list[str], changes: dict[str, dict]) -> list[dict]:
+    raw = manifest.get("selections")
+    if raw is not None:
+        if not isinstance(raw, list):
+            raise ValueError("selections must be a list")
+        selections = []
+        for item in raw:
+            if not isinstance(item, dict) or not isinstance(item.get("change_id"), str):
+                raise ValueError("each selection requires change_id")
+            selections.append({"change_id": item["change_id"], "variant_id": item.get("variant_id")})
+        return selections
+    return [{"change_id": change_id, "variant_id": None} for change_id in approved]
 
 
-def apply_manifest(manifest_path: Path, approved: list[str]) -> dict[str, Any]:
+def _materialize_change(change: dict, variant_id: str | None) -> dict:
+    variants = change.get("variants") or []
+    if variants:
+        target = variant_id or change.get("default_variant") or variants[0]["id"]
+        matches = [variant for variant in variants if variant["id"] == target]
+        if len(matches) != 1:
+            raise ValueError(f"change {change['id']} has no variant {target}")
+        return {**change, "selected_variant": target, "replacement_text": matches[0]["text"]}
+    return dict(change)
+
+
+def apply_manifest(manifest_path: Path, approved: list[str] | None = None) -> dict:
     manifest_path = manifest_path.expanduser().resolve()
-    manifest: dict[str, Any] = json.loads(
-        manifest_path.read_text(encoding="utf-8")
-    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     proposal_path = _resolve_from(manifest_path.parent, manifest.get("proposal"))
-    proposal: dict[str, Any] = (
-        json.loads(proposal_path.read_text(encoding="utf-8"))
-        if proposal_path
-        else manifest
-    )
+    proposal = json.loads(proposal_path.read_text(encoding="utf-8")) if proposal_path else manifest
     if proposal.get("status") == "blocked":
         raise ValueError(proposal.get("reason", "proposal is blocked"))
-    if not isinstance(approved, list) or not all(
-        isinstance(item, str) for item in approved
-    ):
-        raise ValueError("approved_change_ids must be a list of strings")
+    if int(proposal.get("schema_version", 0)) > SCHEMA_VERSION:
+        raise ValueError("proposal schema version is newer than this runtime")
 
-    source = _resolve_from(
-        proposal_path.parent if proposal_path else manifest_path.parent,
-        proposal.get("source"),
-    )
+    source_parent = proposal_path.parent if proposal_path else manifest_path.parent
+    source = _resolve_from(source_parent, proposal.get("source"))
     if source is None:
         raise ValueError("proposal has no source path")
-    if proposal.get("source_sha256") and proposal["source_sha256"] != _sha(source):
+    if proposal.get("source_sha256") != _sha(source):
         raise ValueError("stale proposal: source hash no longer matches")
 
     ledger = _ledger_from_proposal(proposal)
-    changes = {change["id"]: change for change in proposal.get("changes", [])}
-    unknown = [item for item in approved if item not in changes]
+    change_list = proposal.get("changes") or []
+    changes = {str(change["id"]): change for change in change_list}
+    if len(changes) != len(change_list):
+        raise ValueError("proposal contains duplicate change IDs")
+    approved = approved if approved is not None else manifest.get("approved_change_ids") or []
+    if not isinstance(approved, list) or not all(isinstance(item, str) for item in approved):
+        raise ValueError("approved_change_ids must be a list of strings")
+    selections = _selections(manifest, approved, changes)
+    if not selections:
+        raise ValueError("no changes were approved")
+    unknown = [selection["change_id"] for selection in selections if selection["change_id"] not in changes]
     if unknown:
-        raise ValueError(f"unknown approved change IDs: {', '.join(unknown)}")
+        raise ValueError("unknown approved change IDs: " + ", ".join(unknown))
 
-    text = load(source)["text"]
-    original = text
-    applied: list[dict[str, Any]] = []
-    for change_id in approved:
-        change = changes[change_id]
+    materialized: list[dict] = []
+    anchors: set[tuple] = set()
+    for selection in selections:
+        change = _materialize_change(changes[selection["change_id"]], selection.get("variant_id"))
         validate_change(change, ledger)
-        if change.get("operation") not in {None, "replace", "replace_span"}:
-            raise ValueError(
-                f"change {change_id} uses unsupported operation: "
-                f"{change.get('operation')}"
-            )
-        expected = str(change.get("expected_text", change.get("from", "")))
-        replacement = str(change.get("replacement_text", change.get("to", "")))
-        matches = [
-            index
-            for index in range(len(text))
-            if text.startswith(expected, index)
-        ]
-        if len(matches) == 0:
-            raise ValueError(f"change {change_id} expected text was not found")
-        if len(matches) > 1:
-            raise ValueError(f"change {change_id} is ambiguous: {len(matches)} matches")
-        start = matches[0]
-        text = text[:start] + replacement + text[start + len(expected) :]
-        applied.append(
-            {
-                "id": change_id,
-                "status": "applied",
-                "expected_text": expected,
-                "replacement_text": replacement,
-                "evidence_ids": list(change.get("evidence_ids", [])),
-                "start": start,
-                "end": start + len(replacement),
-            }
+        anchor = change.get("anchor") or {}
+        conflict_key = (
+            change.get("operation"),
+            anchor.get("part"),
+            anchor.get("paragraph_index"),
+            anchor.get("line_number"),
+            change.get("expected_text"),
         )
+        if conflict_key in anchors:
+            raise ValueError(f"conflicting approved changes share an anchor: {change['id']}")
+        anchors.add(conflict_key)
+        materialized.append(change)
 
-    if text == original:
-        raise ValueError("approved changes produced no output change")
-
-    output_value = manifest.get("output")
-    output = (
-        _resolve_from(manifest_path.parent, output_value)
-        if output_value
-        else _default_output(source)
-    )
-    if output is None:
-        raise ValueError("could not determine output path")
-    if output.resolve() == source.resolve():
+    output = _resolve_from(manifest_path.parent, manifest.get("output")) or _default_output(source)
+    if output == source:
         raise ValueError("output must not overwrite the source")
+    if output.suffix.lower() == ".pdf":
+        raise ValueError("PDF output requires a genuine PDF renderer; choose DOCX or text output")
+    mode = str(manifest.get("mode") or manifest.get("document_mode") or "preserve")
+    if mode not in {"preserve", "rebuild"}:
+        raise ValueError("mode must be preserve or rebuild")
 
-    document_mode = _write_output(
-        source,
-        output,
-        text,
-        applied,
-        manifest.get("document_mode"),
-    )
+    original = load(source)["body_text"]
+    patch_document(source, output, materialized, mode=mode)
+    loaded_output = load(output)
+    updated = loaded_output["body_text"]
+    if updated == original:
+        raise ValueError("approved changes produced no output change")
+    for change in materialized:
+        if change["operation"] != "delete_span" and change["replacement_text"] not in updated:
+            raise ValueError(f"output verification failed for change {change['id']}")
 
-    output_text = load(output)["text"]
-    if output_text != text:
-        raise ValueError("output verification failed after document write")
     diff = "".join(
         difflib.unified_diff(
             original.splitlines(True),
-            text.splitlines(True),
+            updated.splitlines(True),
             fromfile=str(source),
             tofile=str(output),
         )
     )
-    validation = {
-        "path": str(output),
-        "status": "audited",
-        **audit_text(output_text),
-    }
+    applied = [
+        {
+            "id": change["id"],
+            "status": "applied",
+            "operation": change["operation"],
+            "selected_variant": change.get("selected_variant"),
+            "evidence_ids": change["evidence_ids"],
+            "replacement_text": change["replacement_text"],
+        }
+        for change in materialized
+    ]
     result = {
         "status": "applied",
+        "schema_version": SCHEMA_VERSION,
         "approved_change_ids": [item["id"] for item in applied],
         "applied_changes": applied,
         "source": str(source),
         "output": str(output),
-        "document_mode": document_mode,
+        "mode": mode,
+        "document_mode": mode,
         "source_overwrite": False,
         "source_sha256": _sha(source),
         "output_sha256": _sha(output),
         "diff": diff,
-        "validation": validation,
+        "validation": {"path": str(output), "status": "audited", **audit_text(loaded_output["text"], loaded_output.get("diagnostics"))},
     }
     log = output.with_suffix(output.suffix + ".applied.json")
     log.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")

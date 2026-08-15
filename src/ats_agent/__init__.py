@@ -1,1 +1,3 @@
-"""Dependency-free CLI foundation for the ATS CV Agent."""
+"""Evidence-grounded CV tailoring and career intelligence workflow."""
+
+__version__ = "0.9.0"

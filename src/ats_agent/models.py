@@ -1,4 +1,4 @@
-"""Small typed contracts shared by the deterministic workflow."""
+"""Stable public data contracts for integrations."""
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
@@ -6,63 +6,61 @@ from typing import Any, Literal
 
 
 @dataclass(frozen=True)
-class CandidateEvidence:
-    id: str
-    text: str
-    source: str
-    source_span: str = ""
-    confidence: Literal["low", "medium", "high"] = "medium"
-
-
-@dataclass(frozen=True)
-class JobRequirement:
-    id: str
-    term: str
-    category: str
-    importance: Literal["preferred", "mandatory"] = "preferred"
-
-
-@dataclass(frozen=True)
-class EvidenceMatch:
+class RequirementEvidence:
     requirement_id: str
-    evidence_ids: list[str] = field(default_factory=list)
-    coverage: Literal["direct", "transferable", "unsupported"] = "unsupported"
+    coverage: Literal["direct", "transferable", "unsupported"]
+    evidence_ids: tuple[str, ...] = ()
+    confidence: Literal["low", "medium", "high"] = "medium"
     explanation: str = ""
+
+
+@dataclass(frozen=True)
+class RewriteVariant:
+    id: Literal["conservative", "balanced", "compact"]
+    text: str
 
 
 @dataclass(frozen=True)
 class ProposedChange:
     id: str
-    operation: Literal["replace"]
+    kind: str
+    operation: Literal[
+        "replace_span",
+        "insert_after",
+        "insert_before",
+        "delete_span",
+        "none",
+    ]
     expected_text: str
-    replacement_text: str
-    evidence_ids: list[str] = field(default_factory=list)
+    evidence_ids: tuple[str, ...] = ()
+    variants: tuple[RewriteVariant, ...] = ()
     supported: bool = False
     reason: str = ""
+    anchor: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ApprovalSelection:
+    change_id: str
+    variant_id: str | None = None
 
 
 @dataclass(frozen=True)
 class ApprovalManifest:
     proposal: str
-    approved_change_ids: list[str]
-    output: str | None = None
+    selections: tuple[ApprovalSelection, ...]
+    output: str
+    mode: Literal["preserve", "rebuild"] = "preserve"
 
 
 @dataclass(frozen=True)
 class AppliedChange:
     id: str
     status: Literal["applied"]
-    expected_text: str
+    operation: str
+    evidence_ids: tuple[str, ...]
     replacement_text: str
-    start: int
-    end: int
-
-
-@dataclass(frozen=True)
-class ValidationResult:
-    status: Literal["passed", "blocked"]
-    checks: list[str] = field(default_factory=list)
-    errors: list[str] = field(default_factory=list)
+    selected_variant: str | None = None
 
 
 def model_dict(value: Any) -> dict[str, Any]:

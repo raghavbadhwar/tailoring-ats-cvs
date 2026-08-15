@@ -1,0 +1,2 @@
+- Built Python-based automated procurement workflows validated through 153 tests.
+- Designed approval-first controls for owner-reviewed operational actions.

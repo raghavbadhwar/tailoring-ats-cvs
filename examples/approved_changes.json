@@ -1,6 +1,9 @@
 {
   "proposal": "proposal.json",
+  "selections": [
+    {"change_id": "C1", "variant_id": "balanced"}
+  ],
   "approved_change_ids": ["C1"],
-  "output": "tailored-resume.txt",
-  "notes": "Only explicitly approved and evidence-supported IDs may be applied."
+  "mode": "preserve",
+  "output": "tailored-resume.docx"
 }

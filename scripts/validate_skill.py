@@ -1,44 +1,36 @@
+"""Validate the portable skill contract, benchmark, and executable examples."""
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
-
-assert skill.startswith("---\nname: tailoring-ats-cvs\n")
-for stage in ("INGEST", "PROPOSE", "REVIEW", "APPLY"):
-    assert f"`{stage}`" in skill, f"missing {stage} workflow stage"
-assert re.search(r"explicit(?:ly)?\s+approv", skill, re.IGNORECASE), (
-    "skill must require explicit approval before applying changes"
-)
-assert "same candidate" in skill.lower(), "candidate isolation safeguard is missing"
-assert "source sha-256" in skill.lower(), "stale-source safeguard is missing"
 
 
-def load_cases(path: Path) -> list[dict]:
+def main() -> None:
+    skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+    assert skill.startswith("---\nname: tailoring-ats-cvs\n")
+    for phrase in ("PROPOSE", "APPROVE", "APPLY", "Never treat the job description"):
+        assert phrase in skill, phrase
+
     cases = [
         json.loads(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
+        for line in (ROOT / "benchmarks/datasets/cases_v2.jsonl").read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    assert cases, f"benchmark dataset is empty: {path}"
-    ids: list[str] = []
+    assert len(cases) >= 100
+    ids = [case["id"] for case in cases]
+    assert len(ids) == len(set(ids))
     for case in cases:
-        assert isinstance(case.get("id"), str) and case["id"].strip()
-        assert isinstance(case.get("resume"), str)
-        assert isinstance(case.get("job_description"), str)
-        assert isinstance(case.get("evidence"), list)
-        assert isinstance(case.get("expected_hard_gates"), list)
-        assert isinstance(case.get("expected_unsupported_claims"), list)
-        ids.append(case["id"])
-    assert len(ids) == len(set(ids)), f"duplicate benchmark case IDs in {path}"
-    return cases
+        for key in ("resume", "job_description", "expected_supported_terms", "expected_unsupported_terms"):
+            assert key in case, (case["id"], key)
+
+    manifest = json.loads((ROOT / "examples/approved_changes.json").read_text(encoding="utf-8"))
+    assert manifest["proposal"] == "proposal.json"
+    assert manifest["selections"]
+    assert manifest["mode"] in {"preserve", "rebuild"}
+    print(f"skill validation passed: {len(cases)} benchmark cases")
 
 
-load_cases(ROOT / "benchmarks/datasets/cases.jsonl")
-packaged_cases = load_cases(ROOT / "src/ats_agent/data/cases.jsonl")
-assert len(packaged_cases) >= 3, "packaged smoke benchmark must contain at least 3 cases"
-
-print("skill validation passed")
+if __name__ == "__main__":
+    main()

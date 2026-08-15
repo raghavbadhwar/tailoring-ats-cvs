@@ -1,205 +1,153 @@
-# ATS CV Agent
+# Tailoring ATS CVs — Evidence-Grounded Career Intelligence Agent
 
-An approval-first, evidence-grounded Career Intelligence workflow for tailoring a CV to a job description without inventing qualifications.
+An approval-first tool that reads a candidate CV, a job description, and optional supporting evidence; maps requirements to traceable candidate facts; proposes safe role-aligned rewrites; and applies only explicitly approved changes to a new output document.
 
-> **Status:** alpha (`0.2.0`). The evidence ledger, requirement mapping, conservative rewriting, local approval review, safe apply engine, and ordinary DOCX preserve mode are implemented. Broader semantic extraction, model-backed prose generation, complex DOCX field editing, and large human-reviewed benchmarks remain roadmap items.
+It does **not** invent qualifications, autonomously submit applications, or claim a universal ATS acceptance score.
 
-## What it does
+## What works
 
-- extracts candidate evidence from a CV and optional supporting files;
-- isolates evidence by candidate identity and records file/line provenance;
-- extracts traceable job requirements and common hard eligibility gates;
-- maps each requirement to direct, transferable, or unsupported evidence;
-- proposes conservative rewrites that preserve ownership level;
-- blocks unsupported skills, metrics, ownership escalation, stale proposals, ambiguous edits, no-ops, and source overwrites;
-- produces Markdown and self-contained HTML review reports;
-- allows only supported changes to enter an approval manifest;
-- applies only explicitly approved change IDs;
-- preserves ordinary DOCX paragraph styles, run formatting, lists, tables, headers, and footers when using preserve mode;
-- emits a new output, unified diff, hashes, validation findings, and an applied-change log;
-- reports qualitative recruiter signals without presenting a fake universal ATS score.
+- TXT, Markdown, HTML, RTF, DOCX, and optional text-based PDF ingestion
+- extraction-quality diagnostics and safe blocking
+- candidate-scoped evidence ledger with source spans and ownership levels
+- deterministic hard-gate extraction for degree, graduation year, experience, work authorization, sponsorship, grade, work mode, and travel
+- requirement-to-evidence mapping with direct, transferable, and unsupported states
+- conservative, balanced, and compact evidence-backed rewrite variants
+- unsupported skill, metric, employer, status, and ownership-escalation blocking
+- human approval manifest and self-contained local review HTML
+- exact/stale/ambiguous/no-op validation
+- structure-preserving DOCX patch mode and ATS-safe rebuild mode
+- final re-parse, formatting audit, hashes, diff, and applied-change log
+- 100-case offline safety benchmark
 
 ## Install
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-python -m pip install --upgrade pip
-python -m pip install -e ".[dev,documents]"
+python -m pip install -e .
 ```
 
-Python 3.10 or newer is required. Text-based PDF input uses the optional `pypdf` dependency included in the `documents` extra.
+PDF input requires the optional document extra:
+
+```bash
+python -m pip install -e '.[documents]'
+```
+
+Development environment:
+
+```bash
+python -m pip install -e '.[dev,documents]'
+```
 
 ## End-to-end workflow
 
-### 1. Propose changes
+### 1. Prepare a proposal and review bundle
 
 ```bash
-ats-agent propose resume.docx job.md \
-  --evidence project-bank.md \
-  --candidate-id raghav \
-  --output run/proposal.json
+ats-agent prepare resume.docx job-description.md \
+  --candidate-id raghav-badhwar \
+  --evidence master-project-bank.docx \
+  --company-context official-company-context.md \
+  --out run/
 ```
 
-`PROPOSE` is read-only. The job description supplies requirements and vocabulary; it is never candidate evidence.
+This writes:
 
-### 2. Review and approve
-
-```bash
-ats-agent review run/proposal.json \
-  --markdown run/review.md \
-  --html run/review.html \
-  --output-document tailored-resume.docx
+```text
+run/proposal.json
+run/proposal.md
+run/review.html
 ```
 
-Open `run/review.html` locally. It shows:
+Open `review.html`, inspect evidence and variants, then download `approval-manifest.json`.
 
-- recruiter-oriented signals;
-- the requirement-to-evidence matrix;
-- before/after wording;
-- supporting evidence IDs;
-- unsupported gaps as disabled controls.
-
-Select supported changes and download `approval-manifest.json`. The HTML is self-contained and uses no network assets.
-
-### 3. Apply approved changes
-
-Place the downloaded manifest beside `proposal.json`, then run:
+### 2. Apply approved changes
 
 ```bash
 ats-agent apply run/approval-manifest.json
 ```
 
-The source CV is never overwritten. The output is reopened and verified before success is reported.
+The source is never overwritten. The command creates a tailored document and an `.applied.json` audit log.
+
+### 3. Validate the output
+
+```bash
+ats-agent validate run/tailored-resume.docx
+```
 
 ## Other commands
 
 ```bash
-ats-agent audit resume.docx job.md --evidence project-bank.md --candidate-id raghav
-ats-agent format resume.docx --json
-ats-agent benchmark
-ats-agent benchmark --dataset benchmarks/datasets/cases.jsonl
+ats-agent doctor
+ats-agent audit resume.docx job.md --candidate-id candidate-1
+ats-agent propose resume.docx job.md --output proposal.json
+ats-agent format resume.docx
+ats-agent benchmark --dataset benchmarks/datasets/cases_v2.jsonl
 ```
 
-The default benchmark fixtures are packaged with the installed CLI, so `ats-agent benchmark` works outside the repository directory.
-
-## Reproducible repository example
-
-```bash
-run_dir="$(mktemp -d)"
-
-ats-agent propose \
-  examples/sample_resume.txt \
-  examples/sample_job.md \
-  --evidence examples/sample_project_bank.md \
-  --candidate-id sample-candidate \
-  --output "$run_dir/proposal.json"
-
-ats-agent review "$run_dir/proposal.json" \
-  --markdown "$run_dir/review.md" \
-  --html "$run_dir/review.html" \
-  --output-document tailored-resume.txt
-
-cp examples/approved_changes.json "$run_dir/approval-manifest.json"
-(cd "$run_dir" && ats-agent apply approval-manifest.json)
-```
-
-Expected artifacts:
-
-- `proposal.json` — requirements, evidence, mappings, and proposed changes;
-- `review.md` and `review.html` — human-readable approval reports;
-- `tailored-resume.txt` — new output; the source remains unchanged;
-- `tailored-resume.txt.applied.json` — exact edits, hashes, diff, and validation.
-
-## Proposal contract
-
-A proposal contains:
-
-- source and job-description SHA-256 hashes;
-- candidate ID;
-- evidence ledger with source file and line provenance;
-- extracted requirements with JD source spans;
-- requirement-to-evidence mappings;
-- supported and unsupported change proposals;
-- parser, language, recruiter, hiring-manager, and interview-defense reports.
-
-A supported rewrite resembles:
+## Approval manifest
 
 ```json
 {
-  "id": "C1",
-  "operation": "replace_span",
-  "expected_text": "Helped build automated order workflows with 42 tests.",
-  "replacement_text": "Contributed to workflow automation for orders with 42 tests.",
-  "evidence_ids": ["E..."],
-  "supported": true,
-  "ownership_before": "contributor",
-  "ownership_after": "contributor"
+  "proposal": "proposal.json",
+  "selections": [
+    {"change_id": "C1", "variant_id": "balanced"},
+    {"change_id": "C3", "variant_id": "compact"}
+  ],
+  "approved_change_ids": ["C1", "C3"],
+  "mode": "preserve",
+  "output": "tailored-resume.docx"
 }
 ```
 
-Missing qualifications remain unsupported and cannot be approved into the CV.
+`mode` can be:
 
-## Safety invariants
+- `preserve`: patch a DOCX while retaining its package, paragraph styles, headers, footers, hyperlinks, and unrelated content;
+- `rebuild`: create a clean one-column ATS-safe DOCX from extracted text.
 
-`APPLY` enforces all of the following:
+PDF is input-only unless a genuine PDF renderer is added. The tool never writes plain text to a fake `.pdf` file.
 
-- approved change IDs must exist;
-- evidence IDs must exist in the same candidate ledger;
-- ownership cannot be escalated beyond supporting evidence;
-- unsupported known qualifications and numeric claims are blocked;
-- the source SHA-256 must still match;
-- expected text must occur exactly once;
-- no-op and unsupported operations are rejected;
-- the output cannot overwrite the source;
-- `.pdf` output is blocked unless a genuine renderer is implemented;
-- the generated output is reopened and verified before success is reported.
+## Safety model
 
-## Document support
+The job description is vocabulary, not evidence. A supported change must reference real evidence IDs from the same candidate ledger. The validator blocks:
 
-| Format | Input | Output | Current behavior |
-|---|---:|---:|---|
-| TXT / Markdown | Yes | Yes | Full proposal/review/apply workflow |
-| HTML / RTF | Basic | Text | Normalized text extraction |
-| DOCX | Yes | Yes | Preserve mode patches ordinary paragraphs/runs and retains styles, tables, headers, and footers; rebuild mode creates a controlled text-first DOCX |
-| Text-based PDF | Optional | No | Input requires `pypdf`; image-only/scanned files are blocked when no text is extractable |
+- unknown or cross-candidate evidence;
+- stronger ownership than the evidence supports;
+- new numbers, employers, skills, certifications, users, customers, revenue, or production status;
+- stale proposals;
+- missing, ambiguous, conflicting, or no-op edits;
+- source overwrites.
 
-DOCX preserve mode intentionally blocks complex field/hyperlink paragraphs that cannot be safely represented as ordinary runs. It does not silently flatten them. PDF output is not implemented.
+## Benchmark
 
-## Benchmarking
+```bash
+python scripts/generate_benchmark.py
+python scripts/check_benchmark.py
+```
 
-Reported metrics are transparent engineering measures such as:
-
-- supported-requirement recall;
-- unsupported-requirement detection;
-- evidence-provenance coverage.
-
-Unimplemented metrics return `null` with an explicit status. The project does not turn these metrics into an employer acceptance prediction.
+The committed dataset contains 100 deterministic cases across supported skills, supporting evidence, unsupported qualifications, graduation/degree gates, and experience gates. Metrics are transparent engineering measures—not employer acceptance predictions.
 
 ## Repository map
 
-- `SKILL.md` — portable workflow and approval boundary;
-- `src/ats_agent/evidence.py` — candidate-specific evidence ledger and ownership model;
-- `src/ats_agent/requirements.py` — hard-gate extraction and requirement mapping;
-- `src/ats_agent/rewriting.py` — conservative evidence-backed rewrites;
-- `src/ats_agent/validation.py` — factual and ownership checks;
-- `src/ats_agent/docx_patch.py` — structure-preserving DOCX patcher;
-- `src/ats_agent/reports.py` — Markdown and offline HTML approval review;
-- `src/ats_agent/workflow.py` — proposal and approval-gated apply orchestration;
-- `benchmarks/` and `src/ats_agent/data/` — evaluation fixtures;
-- `tests/` — workflow, safety, reporting, document, and CLI tests;
-- `.github/workflows/ci.yml` — validation, lint, typing, coverage, package, compatibility, and end-to-end checks.
+```text
+src/ats_agent/
+  agents.py        explainable recruiter/hiring-manager reports
+  benchmark.py     measured safety and coverage metrics
+  cli.py           user-facing commands
+  documents.py     anchored text/DOCX editing
+  evidence.py      candidate-scoped provenance ledger
+  formatting.py    parser-risk diagnostics
+  ingestion.py     safe document extraction
+  reporting.py     Markdown and HTML review bundles
+  requirements.py  JD requirements, hard gates, and evidence mapping
+  rewriting.py     protected rewrite variants
+  validation.py    deterministic factual guardrails
+  workflow.py      PROPOSE → APPROVE → APPLY orchestration
+```
 
-## Non-goals
+## Known limits
 
-The project does not:
+- Semantic matching is deterministic and taxonomy-based by default; it is intentionally conservative.
+- Text-based PDF input requires `pypdf`; scanned PDFs are blocked rather than OCRed silently.
+- Preserve mode retains the DOCX package and unrelated styling, but complex mixed-format paragraphs should be visually reviewed.
+- Human preference and real hiring-outcome studies are not yet available, so the project makes no acceptance-rate claim.
 
-- predict an employer's acceptance decision;
-- produce a universal ATS score;
-- submit job applications;
-- invent candidate experience;
-- autonomously approve edits;
-- treat a number in a CV as proof of the underlying statement;
-- claim that deterministic rewriting replaces a human-reviewed language model.
-
-See `ROADMAP.md` for the remaining work toward a stable 9/10-usability release.
+See `docs/architecture.md`, `docs/evidence-model.md`, `docs/privacy.md`, and `SECURITY.md`.
