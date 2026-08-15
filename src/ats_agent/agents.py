@@ -7,6 +7,7 @@ acceptance. Verified evidence is handled by :mod:`ats_agent.evidence`.
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from .requirements import TERM_ALIASES, extract_requirements
 
@@ -69,7 +70,7 @@ def _claims(cv: str) -> list[str]:
     ]
 
 
-def jd_intelligence(jd: str) -> dict:
+def jd_intelligence(jd: str) -> dict[str, Any]:
     requirements = extract_requirements(jd)
     body = _lower(jd)
     return {
@@ -87,7 +88,7 @@ def jd_intelligence(jd: str) -> dict:
     }
 
 
-def ats(cv: str, jd: str = "") -> dict:
+def ats(cv: str, jd: str = "") -> dict[str, Any]:
     lines = str(cv or "").splitlines()
     issues: list[str] = []
     if not str(cv or "").strip():
@@ -118,8 +119,8 @@ def ats(cv: str, jd: str = "") -> dict:
     }
 
 
-def keywords(cv: str, jd: str) -> dict:
-    rows: list[dict] = []
+def keywords(cv: str, jd: str) -> dict[str, Any]:
+    rows: list[dict[str, Any]] = []
     for requirement in extract_requirements(jd):
         terms = list(requirement.get("normalized_terms", []))
         covered = bool(terms) and all(_contains_term(cv, term) for term in terms)
@@ -136,11 +137,7 @@ def keywords(cv: str, jd: str) -> dict:
                 ),
             }
         )
-    coverage = (
-        sum(row["covered"] for row in rows) / len(rows)
-        if rows
-        else None
-    )
+    coverage = sum(row["covered"] for row in rows) / len(rows) if rows else None
     return {
         "agent": "keyword-strategy",
         "rows": rows,
@@ -149,8 +146,8 @@ def keywords(cv: str, jd: str) -> dict:
     }
 
 
-def language(cv: str) -> dict:
-    findings: list[dict] = []
+def language(cv: str) -> dict[str, Any]:
+    findings: list[dict[str, str]] = []
     body = _lower(cv)
     for phrase in GENERIC:
         if phrase in body:
@@ -174,7 +171,13 @@ def language(cv: str) -> dict:
             )
     bullets = _claims(cv)
     metric_signals = sum(
-        bool(re.search(r"\d|%|tests?|users?|records?|github|https?://", line, re.IGNORECASE))
+        bool(
+            re.search(
+                r"\d|%|tests?|users?|records?|github|https?://",
+                line,
+                re.IGNORECASE,
+            )
+        )
         for line in bullets
     )
     return {
@@ -186,10 +189,10 @@ def language(cv: str) -> dict:
     }
 
 
-def recruiter(cv: str, jd: str) -> dict:
+def recruiter(cv: str, jd: str) -> dict[str, Any]:
     first = " ".join(str(cv).splitlines()[:12])
     keyword_report = keywords(cv, jd)
-    rows = keyword_report["rows"]
+    rows: list[dict[str, Any]] = keyword_report["rows"]
     mandatory = [row for row in rows if row["importance"] == "mandatory"]
     missing_mandatory = [
         term
@@ -242,7 +245,7 @@ def recruiter(cv: str, jd: str) -> dict:
     }
 
 
-def hiring_manager(cv: str, jd: str) -> dict:
+def hiring_manager(cv: str, jd: str) -> dict[str, Any]:
     claims = _claims(cv)
     questions = [
         {
@@ -269,7 +272,7 @@ def hiring_manager(cv: str, jd: str) -> dict:
     }
 
 
-def evidence(cv: str) -> dict:
+def evidence(cv: str) -> dict[str, Any]:
     rows = [
         {
             "id": f"C{index}",
@@ -287,44 +290,43 @@ def evidence(cv: str) -> dict:
     }
 
 
-def career_report(cv: str, jd: str) -> dict:
-    report = {
-        "schema_version": 2,
-        "agents": {
-            "ats": ats(cv, jd),
-            "jd": jd_intelligence(jd),
-            "keywords": keywords(cv, jd),
-            "language": language(cv),
-            "recruiter": recruiter(cv, jd),
-            "hiring_manager": hiring_manager(cv, jd),
-            "evidence": evidence(cv),
-        },
+def career_report(cv: str, jd: str) -> dict[str, Any]:
+    agent_reports: dict[str, dict[str, Any]] = {
+        "ats": ats(cv, jd),
+        "jd": jd_intelligence(jd),
+        "keywords": keywords(cv, jd),
+        "language": language(cv),
+        "recruiter": recruiter(cv, jd),
+        "hiring_manager": hiring_manager(cv, jd),
+        "evidence": evidence(cv),
     }
-    report["agents"]["company_alignment"] = {
+    agent_reports["company_alignment"] = {
         "agent": "company-language-alignment",
         "matched_vocabulary": [
             term
-            for term in report["agents"]["jd"]["vocabulary"]
+            for term in agent_reports["jd"]["vocabulary"]
             if term in _terms(cv)
         ][:20],
         "source_status": "job-description-only",
     }
-    report["agents"]["interview_defense"] = {
+    evidence_claims: list[dict[str, Any]] = agent_reports["evidence"]["claims"]
+    agent_reports["interview_defense"] = {
         "agent": "interview-defense",
-        "follow_ups": [row["claim"] for row in report["agents"]["evidence"]["claims"]],
+        "follow_ups": [row["claim"] for row in evidence_claims],
     }
-    return report
+    return {"schema_version": 2, "agents": agent_reports}
 
 
-def proposals(cv: str, jd: str, report: dict) -> list[dict]:
+def proposals(cv: str, jd: str, report: dict[str, Any]) -> list[dict[str, Any]]:
     """Return non-applicable legacy suggestions.
 
     The supported rewrite path lives in :func:`rewriting.propose_supported_changes`,
     where every change is validated against a candidate-specific evidence ledger.
     """
     del cv, jd
-    suggestions: list[dict] = []
-    for finding in report["agents"]["language"]["findings"]:
+    suggestions: list[dict[str, Any]] = []
+    language_findings: list[dict[str, str]] = report["agents"]["language"]["findings"]
+    for finding in language_findings:
         suggestions.append(
             {
                 "id": f"L{len(suggestions) + 1}",
