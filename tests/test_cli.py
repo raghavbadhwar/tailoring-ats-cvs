@@ -6,17 +6,16 @@ import unittest
 from hashlib import sha256
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
-
 from ats_agent.ingestion import write_docx
 from ats_agent.workflow import apply_manifest
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 class CliTests(unittest.TestCase):
     def run_cli(self, *args):
         return subprocess.run(
-            [sys.executable, "-m", "src.ats_agent.cli", *args],
+            [sys.executable, "-m", "ats_agent.cli", *args],
             cwd=ROOT,
             text=True,
             capture_output=True,
