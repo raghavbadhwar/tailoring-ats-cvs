@@ -104,6 +104,8 @@ def detect_ownership(text: str) -> Ownership:
 
 def _is_heading(line: str) -> bool:
     stripped = line.strip().rstrip(":")
+    if stripped.startswith("#"):
+        return True
     return bool(stripped) and stripped.upper() == stripped and len(stripped.split()) <= 6
 
 
