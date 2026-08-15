@@ -24,9 +24,16 @@ TERM_ALIASES: dict[str, tuple[str, ...]] = {
         "workflow system",
         "workflow systems",
         "automated order workflows",
+        "automated procurement workflows",
         "process automation",
     ),
-    "ai agents": ("ai agents", "ai agent", "agentic ai", "agentic workflows", "multi-agent"),
+    "ai agents": (
+        "ai agents",
+        "ai agent",
+        "agentic ai",
+        "agentic workflows",
+        "multi-agent",
+    ),
     "human-in-the-loop": (
         "human-in-the-loop",
         "human in the loop",
@@ -35,11 +42,21 @@ TERM_ALIASES: dict[str, tuple[str, ...]] = {
         "approval-gated",
         "human approval",
     ),
-    "product requirements": ("product requirements", "prd", "requirements document", "product specification"),
+    "product requirements": (
+        "product requirements",
+        "prd",
+        "requirements document",
+        "product specification",
+    ),
     "market research": ("market research", "market analysis", "customer research"),
     "market sizing": ("market sizing", "tam", "sam", "som"),
     "procurement": ("procurement", "tender", "tenders", "rfq", "sourcing"),
-    "financial analysis": ("financial analysis", "financial modelling", "financial modeling", "unit economics"),
+    "financial analysis": (
+        "financial analysis",
+        "financial modelling",
+        "financial modeling",
+        "unit economics",
+    ),
     "testing": ("testing", "tests", "test suite", "end-to-end", "e2e"),
 }
 
@@ -54,6 +71,22 @@ MANDATORY_MARKERS = (
     "will not sponsor",
 )
 PREFERRED_MARKERS = ("preferred", "nice to have", "desirable", "a plus")
+NUMBER_WORDS = {
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+    "fifteen": 15,
+}
+NUMBER_PATTERN = "|".join(NUMBER_WORDS)
 
 
 def _segments(text: str) -> Iterable[tuple[str, int, int]]:
@@ -65,11 +98,26 @@ def _segments(text: str) -> Iterable[tuple[str, int, int]]:
 
 def _importance(segment: str) -> str:
     body = segment.lower()
-    if any(marker in body for marker in MANDATORY_MARKERS):
-        return "mandatory"
     if any(marker in body for marker in PREFERRED_MARKERS):
         return "preferred"
+    if any(marker in body for marker in MANDATORY_MARKERS):
+        return "mandatory"
     return "preferred"
+
+
+def _contains_alias(text: str, alias: str) -> bool:
+    return (
+        re.search(
+            rf"(?<![a-z0-9]){re.escape(alias.lower())}(?![a-z0-9])",
+            text.lower(),
+        )
+        is not None
+    )
+
+
+def _parse_number(value: str) -> int:
+    lowered = value.lower()
+    return int(value) if value.isdigit() else NUMBER_WORDS[lowered]
 
 
 def _record(
@@ -102,7 +150,11 @@ def extract_requirements(job_description: str) -> list[dict]:
         body = segment.lower()
         importance = _importance(segment)
 
-        years = re.search(r"(?:minimum\s+of\s+|at\s+least\s+|need(?:s)?\s+)?(\d+)\s*\+?\s*(?:years?|yrs?)", body)
+        years = re.search(
+            rf"(?:minimum\s+of\s+|at\s+least\s+|need(?:s)?\s+)?"
+            rf"(?P<years>\d+|{NUMBER_PATTERN})\s*\+?\s*(?:years?|yrs?)",
+            body,
+        )
         if years:
             requirements.append(
                 _record(
@@ -110,10 +162,10 @@ def extract_requirements(job_description: str) -> list[dict]:
                     text=segment,
                     terms=["professional experience"],
                     category="eligibility",
-                    importance="mandatory" if importance == "mandatory" or "experience" in body else importance,
+                    importance=importance,
                     start=start,
                     end=end,
-                    minimum_years=int(years.group(1)),
+                    minimum_years=_parse_number(years.group("years")),
                 )
             )
 
@@ -130,7 +182,11 @@ def extract_requirements(job_description: str) -> list[dict]:
                 )
             )
 
-        if re.search(r"no sponsorship|sponsorship (?:is )?(?:not available|unavailable)|will not sponsor|cannot sponsor", body):
+        if re.search(
+            r"no sponsorship|sponsorship (?:is )?(?:not available|unavailable)|"
+            r"will not sponsor|cannot sponsor",
+            body,
+        ):
             requirements.append(
                 _record(
                     kind="sponsorship",
@@ -144,7 +200,10 @@ def extract_requirements(job_description: str) -> list[dict]:
                 )
             )
 
-        graduation = re.search(r"(?:graduat(?:e|ing)|class of)[^0-9]{0,24}(20\d{2})", body)
+        graduation = re.search(
+            r"(?:graduat(?:e|ing)|class of)[^0-9]{0,24}(20\d{2})",
+            body,
+        )
         if graduation:
             requirements.append(
                 _record(
@@ -159,7 +218,10 @@ def extract_requirements(job_description: str) -> list[dict]:
                 )
             )
 
-        degree = re.search(r"\b(bachelor(?:'s)?|master(?:'s)?|b\.?(?:tech|com|sc)|m\.?(?:ba|com|sc))\b", body)
+        degree = re.search(
+            r"\b(bachelor(?:'s)?|master(?:'s)?|b\.?(?:tech|com|sc)|m\.?(?:ba|com|sc))\b",
+            body,
+        )
         if degree:
             requirements.append(
                 _record(
@@ -174,7 +236,7 @@ def extract_requirements(job_description: str) -> list[dict]:
             )
 
         for canonical, aliases in TERM_ALIASES.items():
-            if any(re.search(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])", body) for alias in aliases):
+            if any(_contains_alias(body, alias) for alias in aliases):
                 key = ("skill", (canonical,), start)
                 if key in seen:
                     continue
@@ -184,7 +246,23 @@ def extract_requirements(job_description: str) -> list[dict]:
                         kind="skill",
                         text=segment,
                         terms=[canonical],
-                        category="technical" if canonical in {"python", "typescript", "javascript", "sql", "react", "next.js", "postgres", "supabase", "api", "testing"} else "capability",
+                        category=(
+                            "technical"
+                            if canonical
+                            in {
+                                "python",
+                                "typescript",
+                                "javascript",
+                                "sql",
+                                "react",
+                                "next.js",
+                                "postgres",
+                                "supabase",
+                                "api",
+                                "testing",
+                            }
+                            else "capability"
+                        ),
                         importance=importance,
                         start=start,
                         end=end,
@@ -197,15 +275,20 @@ def extract_requirements(job_description: str) -> list[dict]:
 
 
 def _direct_match(term: str, evidence_text: str) -> bool:
-    return re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", evidence_text.lower()) is not None
+    return _contains_alias(evidence_text, term)
 
 
 def _alias_match(term: str, evidence_text: str) -> bool:
-    body = evidence_text.lower()
-    return any(alias in body for alias in TERM_ALIASES.get(term, (term,)))
+    return any(
+        _contains_alias(evidence_text, alias)
+        for alias in TERM_ALIASES.get(term, (term,))
+    )
 
 
-def map_requirements(requirements: Iterable[dict], ledger: EvidenceLedger) -> list[dict]:
+def map_requirements(
+    requirements: Iterable[dict],
+    ledger: EvidenceLedger,
+) -> list[dict]:
     mappings: list[dict] = []
     for requirement in requirements:
         terms = list(requirement.get("normalized_terms", []))
