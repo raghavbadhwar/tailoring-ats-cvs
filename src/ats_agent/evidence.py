@@ -26,6 +26,28 @@ SKILL_SIGNAL = re.compile(
 )
 
 
+def _optional_int(value: object) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise ValueError("boolean is not a valid numeric position")
+    if isinstance(value, int):
+        return value
+    if isinstance(value, (str, bytes, bytearray)):
+        return int(value)
+    raise ValueError(f"invalid numeric position: {value!r}")
+
+
+def _string_tuple(value: object) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        return (value,)
+    if isinstance(value, Sequence):
+        return tuple(str(item) for item in value)
+    raise ValueError("fact_types must be a sequence")
+
+
 @dataclass(frozen=True)
 class SourceFragment:
     part: str
@@ -37,16 +59,8 @@ class SourceFragment:
     def from_mapping(cls, value: Mapping[str, object]) -> "SourceFragment":
         return cls(
             part=str(value.get("part") or "text"),
-            paragraph_index=(
-                int(value["paragraph_index"])
-                if value.get("paragraph_index") is not None
-                else None
-            ),
-            line_number=(
-                int(value["line_number"])
-                if value.get("line_number") is not None
-                else None
-            ),
+            paragraph_index=_optional_int(value.get("paragraph_index")),
+            line_number=_optional_int(value.get("line_number")),
             text=str(value.get("text") or ""),
         )
 
@@ -85,7 +99,6 @@ class EvidenceItem:
 
     @classmethod
     def from_dict(cls, value: Mapping[str, object]) -> "EvidenceItem":
-        fact_types = value.get("fact_types") or ()
         return cls(
             id=str(value["id"]),
             candidate_id=str(value["candidate_id"]),
@@ -93,16 +106,8 @@ class EvidenceItem:
             source=str(value["source"]),
             source_file=str(value["source_file"]),
             source_span=str(value.get("source_span") or ""),
-            line_number=(
-                int(value["line_number"])
-                if value.get("line_number") is not None
-                else None
-            ),
-            paragraph_index=(
-                int(value["paragraph_index"])
-                if value.get("paragraph_index") is not None
-                else None
-            ),
+            line_number=_optional_int(value.get("line_number")),
+            paragraph_index=_optional_int(value.get("paragraph_index")),
             part=str(value.get("part") or "text"),
             ownership=cast(Ownership, str(value.get("ownership") or "observed")),
             confidence=cast(Confidence, str(value.get("confidence") or "medium")),
@@ -110,7 +115,7 @@ class EvidenceItem:
                 Verification,
                 str(value.get("verification_status") or "candidate_supplied"),
             ),
-            fact_types=tuple(str(item) for item in fact_types),
+            fact_types=_string_tuple(value.get("fact_types")),
             source_sha256=str(value.get("source_sha256") or ""),
         )
 
