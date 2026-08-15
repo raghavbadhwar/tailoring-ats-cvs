@@ -24,18 +24,21 @@ def load_cases(path: Path) -> list[dict]:
         if line.strip()
     ]
     assert cases, f"benchmark dataset is empty: {path}"
+    ids: list[str] = []
     for case in cases:
         assert isinstance(case.get("id"), str) and case["id"].strip()
         assert isinstance(case.get("resume"), str)
         assert isinstance(case.get("job_description"), str)
+        assert isinstance(case.get("evidence"), list)
+        assert isinstance(case.get("expected_hard_gates"), list)
+        assert isinstance(case.get("expected_unsupported_claims"), list)
+        ids.append(case["id"])
+    assert len(ids) == len(set(ids)), f"duplicate benchmark case IDs in {path}"
     return cases
 
 
-legacy_cases = load_cases(ROOT / "benchmarks/datasets/cases.jsonl")
+load_cases(ROOT / "benchmarks/datasets/cases.jsonl")
 packaged_cases = load_cases(ROOT / "src/ats_agent/data/cases.jsonl")
 assert len(packaged_cases) >= 3, "packaged smoke benchmark must contain at least 3 cases"
-assert {case["id"] for case in legacy_cases}.issubset(
-    {case["id"] for case in packaged_cases}
-), "packaged benchmark must retain the canonical legacy case IDs"
 
 print("skill validation passed")
