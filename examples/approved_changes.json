@@ -4,6 +4,6 @@
     {"change_id": "C1", "variant_id": "balanced"}
   ],
   "approved_change_ids": ["C1"],
-  "mode": "preserve",
-  "output": "tailored-resume.docx"
+  "document_mode": "preserve",
+  "output": "tailored-resume.txt"
 }
