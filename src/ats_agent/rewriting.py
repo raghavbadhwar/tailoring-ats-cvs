@@ -160,7 +160,7 @@ def propose_supported_changes(
     matches: Iterable[dict],
     ledger: EvidenceLedger,
 ) -> list[dict]:
-    requirement_index = {item["id"]: item for item in requirements}
+    requirement_ids = {item["id"] for item in requirements}
     matches = list(matches)
     match_index = _matches_by_evidence(matches)
     changes: list[dict] = []
@@ -229,8 +229,12 @@ def propose_supported_changes(
             except ValueError:
                 continue
 
-    matched_requirement_ids = {match["requirement_id"] for match in matches if match.get("coverage") in {"direct", "transferable"}}
-    for requirement_id, requirement in requirement_index.items():
+    matched_requirement_ids = {
+        match["requirement_id"]
+        for match in matches
+        if match.get("coverage") in {"direct", "transferable"}
+    }
+    for requirement_id in requirement_ids:
         if requirement_id in matched_requirement_ids:
             continue
         changes.append(

@@ -1,7 +1,6 @@
 import json
 import tempfile
 import unittest
-from hashlib import sha256
 from pathlib import Path
 
 from ats_agent.documents import patch_document, write_ats_docx

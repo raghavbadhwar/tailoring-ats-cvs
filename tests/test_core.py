@@ -1,10 +1,7 @@
-import json
-import tempfile
 import unittest
-from pathlib import Path
 
 from ats_agent.evidence import EvidenceSource, build_evidence_ledger
-from ats_agent.requirements import extract_requirements, map_requirements, evaluate_hard_gates
+from ats_agent.requirements import evaluate_hard_gates, extract_requirements, map_requirements
 from ats_agent.rewriting import propose_supported_changes
 from ats_agent.validation import validate_change
 

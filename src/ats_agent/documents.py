@@ -166,7 +166,6 @@ def _patch_docx_xml(xml: bytes, changes: list[dict]) -> bytes:
 
 
 def _apply_text(text: str, changes: list[dict]) -> str:
-    lines = text.splitlines()
     result = text
     for change in [c for c in changes if c["operation"] in {"replace", "replace_span", "delete_span"}]:
         expected = change["expected_text"]

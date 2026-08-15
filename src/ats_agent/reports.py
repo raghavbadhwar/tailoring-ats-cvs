@@ -1,6 +1,6 @@
 """Backward-compatible, self-contained human review renderers.
 
-The primary proposal artifacts live in :mod:`ats_agent.reporting`.  This module
+The primary proposal artifacts live in :mod:`ats_agent.reporting`. This module
 keeps the public ``render_markdown`` / ``render_html`` contract used by earlier
 clients while rendering schema-v4 proposals safely.
 """
@@ -20,7 +20,11 @@ def _cell(value: object) -> str:
     return str(value or "").replace("|", "\\|").replace("\n", " ")
 
 
-def _index(proposal: dict[str, Any], collection: str, key: str) -> dict[str, dict[str, Any]]:
+def _index(
+    proposal: dict[str, Any],
+    collection: str,
+    key: str,
+) -> dict[str, dict[str, Any]]:
     return {
         str(item[key]): item
         for item in proposal.get(collection, [])
@@ -54,31 +58,45 @@ def render_markdown(proposal: dict[str, Any]) -> str:
     for signal in recruiter.get("blocking_signals", []):
         lines.append(f"- Blocking: {_cell(signal)}")
 
-    lines.extend([
-        "",
-        "## Requirement-to-Evidence Matrix",
-        "",
-        "| Requirement | Importance | Coverage | Evidence |",
-        "|---|---|---|---|",
-    ])
+    lines.extend(
+        [
+            "",
+            "## Requirement-to-Evidence Matrix",
+            "",
+            "| Requirement | Importance | Coverage | Evidence |",
+            "|---|---|---|---|",
+        ]
+    )
     for requirement_id, requirement in requirements.items():
         mapping = mappings.get(requirement_id, {})
-        terms = ", ".join(str(item) for item in requirement.get("normalized_terms", []))
+        terms = ", ".join(
+            str(item) for item in requirement.get("normalized_terms", [])
+        )
         evidence_labels = []
         for evidence_id in mapping.get("evidence_ids", []):
             item = evidence.get(str(evidence_id), {})
             source = Path(str(item.get("source_file", ""))).name
             span = str(item.get("source_span", ""))
-            evidence_labels.append(f"{evidence_id} ({source} {span})".strip())
+            evidence_labels.append(
+                f"{evidence_id} ({source} {span})".strip()
+            )
         coverage = str(mapping.get("coverage", "unsupported"))
-        label = "Unsupported" if coverage == "unsupported" else coverage.replace("-", " ").title()
+        label = (
+            "Unsupported"
+            if coverage == "unsupported"
+            else coverage.replace("-", " ").title()
+        )
         lines.append(
-            "| " + " | ".join([
-                _cell(terms or requirement.get("text", "")),
-                _cell(requirement.get("importance", "")),
-                _cell(label),
-                _cell(", ".join(evidence_labels) or "None"),
-            ]) + " |"
+            "| "
+            + " | ".join(
+                [
+                    _cell(terms or requirement.get("text", "")),
+                    _cell(requirement.get("importance", "")),
+                    _cell(label),
+                    _cell(", ".join(evidence_labels) or "None"),
+                ]
+            )
+            + " |"
         )
 
     lines.extend(["", "## Proposed Changes", ""])
@@ -88,29 +106,52 @@ def render_markdown(proposal: dict[str, Any]) -> str:
     for change in changes:
         change_id = str(change.get("id", "unknown"))
         supported = bool(change.get("supported"))
-        status = "Supported — eligible for approval" if supported else "Unsupported — cannot apply"
+        status = (
+            "Supported — eligible for approval"
+            if supported
+            else "Unsupported — cannot apply"
+        )
         variants = change.get("variants") or []
         after = change.get("replacement_text", "")
         if variants:
-            after = " / ".join(f"{v.get('id')}: {v.get('text')}" for v in variants)
-        lines.extend([
-            f"### {change_id} — {status}",
+            after = " / ".join(
+                f"{variant.get('id')}: {variant.get('text')}"
+                for variant in variants
+            )
+        lines.extend(
+            [
+                f"### {change_id} — {status}",
+                "",
+                f"**Reason:** {_cell(change.get('reason', ''))}",
+                "",
+                (
+                    "**Before:** "
+                    + (_cell(change.get("expected_text", "")) or "(no existing text)")
+                ),
+                "",
+                f"**After / gap term:** {_cell(after) or '(none)'}",
+                "",
+                (
+                    "**Evidence:** "
+                    + (
+                        _cell(", ".join(str(item) for item in change.get("evidence_ids", [])))
+                        or "None"
+                    )
+                ),
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            "## Approval Boundary",
             "",
-            f"**Reason:** {_cell(change.get('reason', ''))}",
+            (
+                "Only explicitly approved, supported changes may be applied. "
+                "Unsupported requirements remain gaps."
+            ),
             "",
-            f"**Before:** {_cell(change.get('expected_text', '')) or '(no existing text)'}",
-            "",
-            f"**After / gap term:** {_cell(after) or '(none)'}",
-            "",
-            f"**Evidence:** {_cell(', '.join(str(x) for x in change.get('evidence_ids', []))) or 'None'}",
-            "",
-        ])
-    lines.extend([
-        "## Approval Boundary",
-        "",
-        "Only explicitly approved, supported changes may be applied. Unsupported requirements remain gaps.",
-        "",
-    ])
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -132,14 +173,21 @@ def render_html(
         labels = []
         for evidence_id in mapping.get("evidence_ids", []):
             item = evidence.get(str(evidence_id), {})
-            labels.append(f"{evidence_id} — {item.get('text', 'Missing evidence record')}")
-        terms = ", ".join(str(x) for x in requirement.get("normalized_terms", []))
+            labels.append(
+                f"{evidence_id} — {item.get('text', 'Missing evidence record')}"
+            )
+        terms = ", ".join(
+            str(item) for item in requirement.get("normalized_terms", [])
+        )
+        evidence_html = "<br>".join(_escape(item) for item in labels)
+        if not evidence_html:
+            evidence_html = '<span class="muted">No supporting evidence</span>'
         rows.append(
             "<tr>"
             f"<td>{_escape(terms or requirement.get('text', ''))}</td>"
             f"<td>{_escape(requirement.get('importance', ''))}</td>"
             f"<td>{_escape(mapping.get('coverage', 'unsupported'))}</td>"
-            f"<td>{'<br>'.join(_escape(x) for x in labels) or '<span class=\"muted\">No supporting evidence</span>'}</td>"
+            f"<td>{evidence_html}</td>"
             "</tr>"
         )
 
@@ -150,20 +198,30 @@ def render_html(
         disabled = "" if supported else " disabled"
         variants = change.get("variants") or []
         options = "".join(
-            f'<option value="{_escape(v.get("id"))}">{_escape(v.get("id"))} — {_escape(v.get("text"))}</option>'
-            for v in variants
+            (
+                f'<option value="{_escape(variant.get("id"))}">'
+                f'{_escape(variant.get("id"))} — '
+                f'{_escape(variant.get("text"))}</option>'
+            )
+            for variant in variants
         )
         if not options:
-            options = f'<option value="default">{_escape(change.get("replacement_text", ""))}</option>'
+            options = (
+                f'<option value="default">'
+                f'{_escape(change.get("replacement_text", ""))}</option>'
+            )
         cards.append(
             f'<article class="change" data-change-id="{_escape(change_id)}">'
-            f'<label><input type="checkbox" name="change" value="{_escape(change_id)}"{disabled}> '
+            f'<label><input type="checkbox" name="change" '
+            f'value="{_escape(change_id)}"{disabled}> '
             f'<strong>{_escape(change_id)}</strong></label>'
             f'<p>{_escape(change.get("reason", ""))}</p>'
             f'<pre>{_escape(change.get("expected_text", ""))}</pre>'
-            f'<select data-variant-for="{_escape(change_id)}"{disabled}>{options}</select>'
-            f'<p>Evidence: {_escape(", ".join(str(x) for x in change.get("evidence_ids", [])) or "None")}</p>'
-            "</article>"
+            f'<select data-variant-for="{_escape(change_id)}"{disabled}>'
+            f'{options}</select>'
+            f'<p>Evidence: '
+            f'{_escape(", ".join(str(item) for item in change.get("evidence_ids", [])) or "None")}'
+            f'</p></article>'
         )
 
     proposal_file_json = json.dumps(proposal_filename).replace("</", "<\\/")
@@ -186,7 +244,7 @@ document.getElementById('download').addEventListener('click',()=>{{
  const selections=[...document.querySelectorAll('input[name="change"]:checked:not(:disabled)')].map(box=>{{
   const id=box.value; const select=document.querySelector(`[data-variant-for="${{id}}"]`); return {{change_id:id,variant_id:select.value}};
  }});
- const manifest={{proposal:proposalFile,approved_change_ids:selections.map(x=>x.change_id),selections,output:outputDocument,mode:'preserve'}};
+ const manifest={{proposal:proposalFile,approved_change_ids:selections.map(x=>x.change_id),selections,output:outputDocument,document_mode:'preserve'}};
  const blob=new Blob([JSON.stringify(manifest,null,2)],{{type:'application/json'}}); const a=document.createElement('a');
  a.href=URL.createObjectURL(blob); a.download='approval-manifest.json'; a.click(); URL.revokeObjectURL(a.href);
 }});
