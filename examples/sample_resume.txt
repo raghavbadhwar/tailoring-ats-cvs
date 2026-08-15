@@ -1,0 +1,14 @@
+RAGHAV EXAMPLE
+AI Product Operations Candidate
+
+SUMMARY
+Commerce student interested in evidence-grounded AI workflow systems.
+
+PROJECTS
+- Helped build automated order workflows with 42 tests.
+
+SKILLS
+Python, SQL
+
+EDUCATION
+Bachelor of Commerce (Honours), Expected 2027
