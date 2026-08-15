@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from importlib.resources import as_file, files
 from pathlib import Path
 
 from .benchmark import run as run_benchmark
@@ -42,6 +43,14 @@ def _proposal_from_args(args: argparse.Namespace) -> dict:
     )
 
 
+def _benchmark_result(dataset: str | None) -> dict:
+    if dataset:
+        return run_benchmark(Path(dataset))
+    resource = files("ats_agent.data").joinpath("cases.jsonl")
+    with as_file(resource) as packaged_dataset:
+        return run_benchmark(packaged_dataset)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="ats-agent")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -64,11 +73,15 @@ def main(argv: list[str] | None = None) -> int:
     apply.add_argument("approved_changes", type=_existing)
 
     benchmark = sub.add_parser("benchmark", help="run the offline synthetic benchmark")
-    benchmark.add_argument("--dataset", default="benchmarks/datasets/cases.jsonl", type=_existing)
+    benchmark.add_argument(
+        "--dataset",
+        type=_existing,
+        help="optional JSONL dataset; defaults to packaged smoke fixtures",
+    )
     args = parser.parse_args(argv)
 
     if args.command == "benchmark":
-        print(json.dumps(run_benchmark(Path(args.dataset)), indent=2))
+        print(json.dumps(_benchmark_result(args.dataset), indent=2))
     elif args.command == "format":
         result = audit_file(args.resume)
         print(json.dumps(result, indent=2 if args.json else None))
