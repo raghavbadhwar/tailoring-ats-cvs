@@ -4,74 +4,227 @@ import difflib
 import hashlib
 import json
 from pathlib import Path
+from typing import Iterable
 
-from .agents import career_report, proposals
-from .formatting import audit_file
+from .agents import career_report
+from .evidence import EvidenceItem, EvidenceLedger, EvidenceSource, build_evidence_ledger
+from .formatting import audit_file, audit_text
 from .ingestion import ExtractionError, load, write_docx
+from .requirements import extract_requirements, map_requirements
+from .rewriting import propose_supported_changes
+from .validation import validate_change
 
 
-def build_proposal(resume: Path, job_description: Path) -> dict:
+def _load_evidence_sources(paths: Iterable[Path]) -> list[EvidenceSource]:
+    sources: list[EvidenceSource] = []
+    for path in paths:
+        loaded = load(path)
+        sources.append(
+            EvidenceSource(
+                source="supporting",
+                source_file=str(path),
+                text=loaded["text"],
+            )
+        )
+    return sources
+
+
+def build_proposal(
+    resume: Path,
+    job_description: Path,
+    evidence_paths: Iterable[Path] | None = None,
+    candidate_id: str = "candidate",
+) -> dict:
+    evidence_paths = list(evidence_paths or [])
     try:
         cv = load(resume)
         jd = load(job_description)
+        sources = [
+            EvidenceSource(
+                source="resume",
+                source_file=str(resume),
+                text=cv["text"],
+            ),
+            *_load_evidence_sources(evidence_paths),
+        ]
     except ExtractionError as exc:
-        return {"schema_version": 2, "status": "blocked", "reason": str(exc), "source": str(resume), "job_description": str(job_description)}
+        return {
+            "schema_version": 3,
+            "status": "blocked",
+            "reason": str(exc),
+            "source": str(resume),
+            "job_description": str(job_description),
+        }
+
+    ledger = build_evidence_ledger(candidate_id, sources)
+    requirements = extract_requirements(jd["text"])
+    requirement_evidence = map_requirements(requirements, ledger)
+    changes = propose_supported_changes(
+        cv["text"],
+        requirements,
+        requirement_evidence,
+        ledger,
+    )
     report = career_report(cv["text"], jd["text"])
-    return {"schema_version": 2, "status": "draft", "source": str(resume), "job_description": str(job_description), "source_sha256": cv["sha256"], "job_description_sha256": jd["sha256"], "changes": proposals(cv["text"], jd["text"], report), "report": report, "formatting": audit_file(str(resume))}
+    report["evidence_summary"] = {
+        "candidate_id": candidate_id,
+        "items": len(ledger.items),
+        "supporting_files": [str(path) for path in evidence_paths],
+    }
+
+    return {
+        "schema_version": 3,
+        "status": "draft",
+        "candidate_id": candidate_id,
+        "source": str(resume),
+        "job_description": str(job_description),
+        "source_sha256": cv["sha256"],
+        "job_description_sha256": jd["sha256"],
+        "evidence_ledger": ledger.to_dicts(),
+        "requirements": requirements,
+        "requirement_evidence": requirement_evidence,
+        "changes": changes,
+        "report": report,
+        "formatting": audit_file(str(resume)),
+    }
 
 
 def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _resolve_from(parent: Path, value: str | None) -> Path | None:
+    if not value:
+        return None
+    path = Path(value)
+    return path if path.is_absolute() else parent / path
+
+
+def _ledger_from_proposal(proposal: dict) -> EvidenceLedger:
+    records = proposal.get("evidence_ledger")
+    if not isinstance(records, list):
+        raise ValueError("proposal has no evidence ledger")
+    items: list[EvidenceItem] = []
+    for record in records:
+        try:
+            items.append(EvidenceItem(**record))
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"invalid evidence record: {record!r}") from exc
+    return EvidenceLedger(
+        candidate_id=str(proposal.get("candidate_id") or "candidate"),
+        items=tuple(items),
+    )
+
+
+def _default_output(source: Path) -> Path:
+    suffix = source.suffix or ".txt"
+    return source.with_name(f"{source.stem}.tailored{suffix}")
+
+
 def apply_manifest(manifest_path: Path, approved: list[str]) -> dict:
+    manifest_path = manifest_path.resolve()
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    proposal_path = manifest.get("proposal")
-    proposal = json.loads(Path(proposal_path).read_text(encoding="utf-8")) if proposal_path else manifest
+    proposal_path = _resolve_from(manifest_path.parent, manifest.get("proposal"))
+    proposal = (
+        json.loads(proposal_path.read_text(encoding="utf-8"))
+        if proposal_path
+        else manifest
+    )
     if proposal.get("status") == "blocked":
         raise ValueError(proposal.get("reason", "proposal is blocked"))
     if not isinstance(approved, list) or not all(isinstance(item, str) for item in approved):
         raise ValueError("approved_change_ids must be a list of strings")
-    source = Path(proposal["source"])
+
+    source = _resolve_from(
+        proposal_path.parent if proposal_path else manifest_path.parent,
+        proposal.get("source"),
+    )
+    if source is None:
+        raise ValueError("proposal has no source path")
     if proposal.get("source_sha256") and proposal["source_sha256"] != _sha(source):
         raise ValueError("stale proposal: source hash no longer matches")
+
+    ledger = _ledger_from_proposal(proposal)
     changes = {change["id"]: change for change in proposal.get("changes", [])}
     unknown = [item for item in approved if item not in changes]
     if unknown:
         raise ValueError(f"unknown approved change IDs: {', '.join(unknown)}")
+
     text = load(source)["text"]
     original = text
-    applied = []
+    applied: list[dict] = []
     for change_id in approved:
         change = changes[change_id]
-        if not change.get("supported") or not change.get("evidence_ids"):
-            raise ValueError(f"change {change_id} is unsupported or has no evidence references")
+        validate_change(change, ledger)
+        if change.get("operation") not in {None, "replace", "replace_span"}:
+            raise ValueError(f"change {change_id} uses unsupported operation: {change.get('operation')}")
         expected = change.get("expected_text", change.get("from", ""))
         replacement = change.get("replacement_text", change.get("to", ""))
-        if not expected:
-            raise ValueError(f"change {change_id} has no exact expected text")
         matches = [i for i in range(len(text)) if text.startswith(expected, i)]
         if len(matches) == 0:
             raise ValueError(f"change {change_id} expected text was not found")
         if len(matches) > 1:
             raise ValueError(f"change {change_id} is ambiguous: {len(matches)} matches")
         start = matches[0]
-        if expected == replacement:
-            raise ValueError(f"change {change_id} is a no-op")
         text = text[:start] + replacement + text[start + len(expected):]
-        applied.append({"id": change_id, "status": "applied", "expected_text": expected, "replacement_text": replacement, "start": start, "end": start + len(replacement)})
+        applied.append(
+            {
+                "id": change_id,
+                "status": "applied",
+                "expected_text": expected,
+                "replacement_text": replacement,
+                "evidence_ids": list(change.get("evidence_ids", [])),
+                "start": start,
+                "end": start + len(replacement),
+            }
+        )
+
     if text == original:
         raise ValueError("approved changes produced no output change")
-    output = Path(manifest.get("output") or (str(source) + ".approved" + (".docx" if source.suffix.lower() == ".docx" else "")))
+
+    output_value = manifest.get("output")
+    output = _resolve_from(manifest_path.parent, output_value) if output_value else _default_output(source)
+    if output is None:
+        raise ValueError("could not determine output path")
     if output.resolve() == source.resolve():
         raise ValueError("output must not overwrite the source")
+    if output.suffix.lower() == ".pdf":
+        raise ValueError("PDF output requires a genuine PDF renderer; choose DOCX or text output")
+
     output.parent.mkdir(parents=True, exist_ok=True)
     if output.suffix.lower() == ".docx":
         write_docx(output, text)
     else:
         output.write_text(text, encoding="utf-8")
-    diff = "".join(difflib.unified_diff(original.splitlines(True), text.splitlines(True), fromfile=str(source), tofile=str(output)))
-    result = {"status": "applied", "approved_change_ids": [item["id"] for item in applied], "applied_changes": applied, "source": str(source), "output": str(output), "source_overwrite": False, "source_sha256": _sha(source), "output_sha256": _sha(output), "diff": diff, "validation": audit_file(str(output))}
+
+    output_text = load(output)["text"]
+    if output_text != text:
+        raise ValueError("output verification failed after document write")
+    diff = "".join(
+        difflib.unified_diff(
+            original.splitlines(True),
+            text.splitlines(True),
+            fromfile=str(source),
+            tofile=str(output),
+        )
+    )
+    validation = {
+        "path": str(output),
+        "status": "audited",
+        **audit_text(output_text),
+    }
+    result = {
+        "status": "applied",
+        "approved_change_ids": [item["id"] for item in applied],
+        "applied_changes": applied,
+        "source": str(source),
+        "output": str(output),
+        "source_overwrite": False,
+        "source_sha256": _sha(source),
+        "output_sha256": _sha(output),
+        "diff": diff,
+        "validation": validation,
+    }
     log = output.with_suffix(output.suffix + ".applied.json")
     log.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     return result
