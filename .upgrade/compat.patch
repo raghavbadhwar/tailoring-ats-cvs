@@ -1,0 +1,330 @@
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -17,7 +17,7 @@
+ ]
+ 
+ [project.optional-dependencies]
+-documents = ["pypdf>=4.0"]
++documents = ["pypdf>=4.0", "python-docx>=1.1"]
+ dev = [
+   "build>=1.2",
+   "coverage>=7.6",
+--- a/src/ats_agent/agents.py
++++ b/src/ats_agent/agents.py
+@@ -91,6 +91,17 @@
+                 "agent": "evidence-ledger",
+                 "candidate_id": ledger.candidate_id if ledger else None,
+                 "items": ledger.to_dicts() if ledger else [],
++                # Compatibility view for callers that consume claim-level status.
++                # A number in a CV is not external verification; without a source-
++                # verified ledger record, the claim remains unverified.
++                "claims": [
++                    {
++                        "claim": claim,
++                        "verification_status": "unverified",
++                        "verified": False,
++                    }
++                    for claim in claims
++                ],
+             },
+             "company_alignment": {
+                 "agent": "company-language-alignment",
+--- a/src/ats_agent/benchmark.py
++++ b/src/ats_agent/benchmark.py
+@@ -43,8 +43,19 @@
+         if mapping["coverage"] == "unsupported"
+         for term in mapping.get("normalized_terms", [])
+     }
+-    expected_supported = _set(case.get("expected_supported_terms"))
+-    expected_unsupported = _set(case.get("expected_unsupported_terms"))
++    # Schema-v2 names are preferred; v1 fixtures used ``evidence`` for the
++    # expected supported terms and ``expected_unsupported_claims`` for gaps.
++    unsupported_v1 = case.get("expected_unsupported_claims")
++    expected_supported = _set(
++        case.get("expected_supported_terms")
++        if case.get("expected_supported_terms") is not None
++        else ([] if unsupported_v1 else case.get("evidence"))
++    )
++    expected_unsupported = _set(
++        case.get("expected_unsupported_terms")
++        if case.get("expected_unsupported_terms") is not None
++        else unsupported_v1
++    )
+     expected_gates = {
+         str(item["kind"]): str(item["status"])
+         for item in case.get("expected_hard_gates", [])
+@@ -106,7 +117,7 @@
+         "parser_risk_delta": None,
+         "human_rewrite_preference": None,
+         "measurement_status": {
+-            "parser_risk_delta": "requires before/after document fixture suite",
++            "parser_risk_delta": "not_implemented",
+             "human_rewrite_preference": "requires human-labelled evaluation",
+         },
+     }
+--- a/src/ats_agent/cli.py
++++ b/src/ats_agent/cli.py
+@@ -11,6 +11,7 @@
+ from .formatting import audit_file
+ from .ingestion import load
+ from .reporting import write_review_artifacts
++from .reports import render_html, render_markdown
+ from .workflow import apply_manifest, build_proposal
+ 
+ 
+@@ -87,6 +88,12 @@
+     benchmark = sub.add_parser("benchmark", help="run the offline benchmark")
+     benchmark.add_argument("--dataset", required=True, type=_existing)
+ 
++    review = sub.add_parser("review", help="render Markdown and self-contained HTML from a proposal")
++    review.add_argument("proposal", type=_existing)
++    review.add_argument("--markdown", required=True, help="Markdown review output path")
++    review.add_argument("--html", required=True, help="HTML review output path")
++    review.add_argument("--output-document", default="tailored-resume.docx")
++
+     sub.add_parser("doctor", help="show local capabilities and optional dependencies")
+     args = parser.parse_args(argv)
+ 
+@@ -106,6 +113,27 @@
+                 payload["status"] = "ready"
+             if args.command == "propose" and args.output:
+                 _write_json(Path(args.output), payload)
++        elif args.command == "review":
++            proposal_path = Path(args.proposal).expanduser().resolve()
++            proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
++            markdown_path = Path(args.markdown).expanduser().resolve()
++            html_path = Path(args.html).expanduser().resolve()
++            markdown_path.parent.mkdir(parents=True, exist_ok=True)
++            html_path.parent.mkdir(parents=True, exist_ok=True)
++            markdown_path.write_text(render_markdown(proposal), encoding="utf-8")
++            html_path.write_text(
++                render_html(
++                    proposal,
++                    proposal_filename=proposal_path.name,
++                    default_output=args.output_document,
++                ),
++                encoding="utf-8",
++            )
++            payload = {
++                "status": "written",
++                "markdown": str(markdown_path),
++                "html": str(html_path),
++            }
+         elif args.command == "prepare":
+             proposal = _proposal_from_args(args)
+             out = Path(args.out).expanduser().resolve()
+--- a/src/ats_agent/reports.py
++++ b/src/ats_agent/reports.py
+@@ -0,0 +1,193 @@
++"""Backward-compatible, self-contained human review renderers.
++
++The primary proposal artifacts live in :mod:`ats_agent.reporting`.  This module
++keeps the public ``render_markdown`` / ``render_html`` contract used by earlier
++clients while rendering schema-v4 proposals safely.
++"""
++from __future__ import annotations
++
++import html
++import json
++from pathlib import Path
++from typing import Any
++
++
++def _escape(value: object) -> str:
++    return html.escape(str(value or ""), quote=True)
++
++
++def _cell(value: object) -> str:
++    return str(value or "").replace("|", "\\|").replace("\n", " ")
++
++
++def _index(proposal: dict[str, Any], collection: str, key: str) -> dict[str, dict[str, Any]]:
++    return {
++        str(item[key]): item
++        for item in proposal.get(collection, [])
++        if isinstance(item, dict) and item.get(key)
++    }
++
++
++def render_markdown(proposal: dict[str, Any]) -> str:
++    """Render a readable, auditable Markdown proposal review."""
++
++    evidence = _index(proposal, "evidence_ledger", "id")
++    requirements = _index(proposal, "requirements", "id")
++    mappings = _index(proposal, "requirement_evidence", "requirement_id")
++    recruiter = proposal.get("report", {}).get("agents", {}).get("recruiter", {})
++
++    lines = [
++        "# CV Tailoring Review",
++        "",
++        f"- **Status:** {_cell(proposal.get('status', 'unknown'))}",
++        f"- **Candidate:** {_cell(proposal.get('candidate_id', 'candidate'))}",
++        f"- **Source CV:** `{_cell(proposal.get('source', ''))}`",
++        f"- **Job description:** `{_cell(proposal.get('job_description', ''))}`",
++        "",
++        "## Recruiter-Oriented Signals",
++        "",
++        f"- **Disposition:** {_cell(recruiter.get('decision', 'unknown'))}",
++        f"- **Confidence:** {_cell(recruiter.get('confidence', 'unknown'))}",
++    ]
++    for signal in recruiter.get("positive_signals", []):
++        lines.append(f"- Positive: {_cell(signal)}")
++    for signal in recruiter.get("blocking_signals", []):
++        lines.append(f"- Blocking: {_cell(signal)}")
++
++    lines.extend([
++        "",
++        "## Requirement-to-Evidence Matrix",
++        "",
++        "| Requirement | Importance | Coverage | Evidence |",
++        "|---|---|---|---|",
++    ])
++    for requirement_id, requirement in requirements.items():
++        mapping = mappings.get(requirement_id, {})
++        terms = ", ".join(str(item) for item in requirement.get("normalized_terms", []))
++        evidence_labels = []
++        for evidence_id in mapping.get("evidence_ids", []):
++            item = evidence.get(str(evidence_id), {})
++            source = Path(str(item.get("source_file", ""))).name
++            span = str(item.get("source_span", ""))
++            evidence_labels.append(f"{evidence_id} ({source} {span})".strip())
++        coverage = str(mapping.get("coverage", "unsupported"))
++        label = "Unsupported" if coverage == "unsupported" else coverage.replace("-", " ").title()
++        lines.append(
++            "| " + " | ".join([
++                _cell(terms or requirement.get("text", "")),
++                _cell(requirement.get("importance", "")),
++                _cell(label),
++                _cell(", ".join(evidence_labels) or "None"),
++            ]) + " |"
++        )
++
++    lines.extend(["", "## Proposed Changes", ""])
++    changes = proposal.get("changes", [])
++    if not changes:
++        lines.append("No changes were proposed.")
++    for change in changes:
++        change_id = str(change.get("id", "unknown"))
++        supported = bool(change.get("supported"))
++        status = "Supported — eligible for approval" if supported else "Unsupported — cannot apply"
++        variants = change.get("variants") or []
++        after = change.get("replacement_text", "")
++        if variants:
++            after = " / ".join(f"{v.get('id')}: {v.get('text')}" for v in variants)
++        lines.extend([
++            f"### {change_id} — {status}",
++            "",
++            f"**Reason:** {_cell(change.get('reason', ''))}",
++            "",
++            f"**Before:** {_cell(change.get('expected_text', '')) or '(no existing text)'}",
++            "",
++            f"**After / gap term:** {_cell(after) or '(none)'}",
++            "",
++            f"**Evidence:** {_cell(', '.join(str(x) for x in change.get('evidence_ids', []))) or 'None'}",
++            "",
++        ])
++    lines.extend([
++        "## Approval Boundary",
++        "",
++        "Only explicitly approved, supported changes may be applied. Unsupported requirements remain gaps.",
++        "",
++    ])
++    return "\n".join(lines)
++
++
++def render_html(
++    proposal: dict[str, Any],
++    *,
++    proposal_filename: str,
++    default_output: str,
++) -> str:
++    """Render a self-contained local approval page with no network assets."""
++
++    requirements = _index(proposal, "requirements", "id")
++    mappings = _index(proposal, "requirement_evidence", "requirement_id")
++    evidence = _index(proposal, "evidence_ledger", "id")
++
++    rows = []
++    for requirement_id, requirement in requirements.items():
++        mapping = mappings.get(requirement_id, {})
++        labels = []
++        for evidence_id in mapping.get("evidence_ids", []):
++            item = evidence.get(str(evidence_id), {})
++            labels.append(f"{evidence_id} — {item.get('text', 'Missing evidence record')}")
++        terms = ", ".join(str(x) for x in requirement.get("normalized_terms", []))
++        rows.append(
++            "<tr>"
++            f"<td>{_escape(terms or requirement.get('text', ''))}</td>"
++            f"<td>{_escape(requirement.get('importance', ''))}</td>"
++            f"<td>{_escape(mapping.get('coverage', 'unsupported'))}</td>"
++            f"<td>{'<br>'.join(_escape(x) for x in labels) or '<span class=\"muted\">No supporting evidence</span>'}</td>"
++            "</tr>"
++        )
++
++    cards = []
++    for change in proposal.get("changes", []):
++        change_id = str(change.get("id", "unknown"))
++        supported = bool(change.get("supported"))
++        disabled = "" if supported else " disabled"
++        variants = change.get("variants") or []
++        options = "".join(
++            f'<option value="{_escape(v.get("id"))}">{_escape(v.get("id"))} — {_escape(v.get("text"))}</option>'
++            for v in variants
++        )
++        if not options:
++            options = f'<option value="default">{_escape(change.get("replacement_text", ""))}</option>'
++        cards.append(
++            f'<article class="change" data-change-id="{_escape(change_id)}">'
++            f'<label><input type="checkbox" name="change" value="{_escape(change_id)}"{disabled}> '
++            f'<strong>{_escape(change_id)}</strong></label>'
++            f'<p>{_escape(change.get("reason", ""))}</p>'
++            f'<pre>{_escape(change.get("expected_text", ""))}</pre>'
++            f'<select data-variant-for="{_escape(change_id)}"{disabled}>{options}</select>'
++            f'<p>Evidence: {_escape(", ".join(str(x) for x in change.get("evidence_ids", [])) or "None")}</p>'
++            "</article>"
++        )
++
++    proposal_file_json = json.dumps(proposal_filename).replace("</", "<\\/")
++    default_output_json = json.dumps(default_output).replace("</", "<\\/")
++    return f'''<!doctype html>
++<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
++<title>CV Tailoring Review</title><style>
++body{{font-family:system-ui,sans-serif;max-width:1100px;margin:32px auto;padding:0 16px;background:#f6f7fb;color:#172033}}
++section,.change{{background:#fff;border:1px solid #d9dfeb;border-radius:12px;padding:18px;margin:14px 0}}
++table{{width:100%;border-collapse:collapse}}th,td{{padding:10px;border-bottom:1px solid #e6eaf1;text-align:left;vertical-align:top}}
++pre{{white-space:pre-wrap;background:#f7f9fc;padding:10px;border-radius:8px}}select{{width:100%;padding:8px}}.muted{{color:#687386}}
++</style></head><body>
++<h1>CV Tailoring Review</h1>
++<section><h2>Requirement-to-Evidence Matrix</h2><table><thead><tr><th>Requirement</th><th>Importance</th><th>Coverage</th><th>Evidence</th></tr></thead><tbody>{''.join(rows)}</tbody></table></section>
++<section><h2>Proposed changes</h2>{''.join(cards) or '<p>No changes proposed.</p>'}</section>
++<button type="button" id="download">Download approval manifest</button>
++<script>
++const proposalFile={proposal_file_json}; const outputDocument={default_output_json};
++document.getElementById('download').addEventListener('click',()=>{{
++ const selections=[...document.querySelectorAll('input[name="change"]:checked:not(:disabled)')].map(box=>{{
++  const id=box.value; const select=document.querySelector(`[data-variant-for="${{id}}"]`); return {{change_id:id,variant_id:select.value}};
++ }});
++ const manifest={{proposal:proposalFile,approved_change_ids:selections.map(x=>x.change_id),selections,output:outputDocument,mode:'preserve'}};
++ const blob=new Blob([JSON.stringify(manifest,null,2)],{{type:'application/json'}}); const a=document.createElement('a');
++ a.href=URL.createObjectURL(blob); a.download='approval-manifest.json'; a.click(); URL.revokeObjectURL(a.href);
++}});
++</script></body></html>'''
+--- a/src/ats_agent/workflow.py
++++ b/src/ats_agent/workflow.py
+@@ -210,7 +210,7 @@
+         raise ValueError("output must not overwrite the source")
+     if output.suffix.lower() == ".pdf":
+         raise ValueError("PDF output requires a genuine PDF renderer; choose DOCX or text output")
+-    mode = str(manifest.get("mode") or "preserve")
++    mode = str(manifest.get("mode") or manifest.get("document_mode") or "preserve")
+     if mode not in {"preserve", "rebuild"}:
+         raise ValueError("mode must be preserve or rebuild")
+ 
+@@ -251,6 +251,7 @@
+         "source": str(source),
+         "output": str(output),
+         "mode": mode,
++        "document_mode": mode,
+         "source_overwrite": False,
+         "source_sha256": _sha(source),
+         "output_sha256": _sha(output),

@@ -33,7 +33,7 @@ jobs:
       - name: Verify and apply payload
         run: python .upgrade/apply.py
 
-      - name: Snapshot staged implementation for deterministic repair
+      - name: Snapshot staged implementation for deterministic verification
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -41,8 +41,8 @@ jobs:
           lines = path.read_text(encoding="utf-8").splitlines()
           path.write_text("\n".join(line.rstrip() for line in lines) + "\n", encoding="utf-8")
           PY
-          # GitHub Actions tokens cannot update workflow files. Retain the reviewed
-          # workflow definitions in the diagnostic branch and publish product code only.
+          # The Actions token cannot replace workflow definitions. Preserve them
+          # in this diagnostic commit; the connector promotes the verified tree.
           git checkout HEAD -- .github/workflows/ci.yml .github/workflows/apply-upgrade.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -53,7 +53,7 @@ jobs:
           git push --force origin HEAD:agent/9of10-payload-debug
 
       - name: Install runtime with document adapters
-        run: python -m pip install -e '.[documents]' 'python-docx>=1.1'
+        run: python -m pip install -e '.[documents]'
 
       - name: Validate portable skill and benchmark fixtures
         run: python scripts/validate_skill.py
@@ -67,5 +67,5 @@ jobs:
       - name: Compile all Python sources
         run: python -m compileall -q src scripts tests
 
-      - name: Promote verified implementation to feature branch
-        run: git push origin HEAD:agent/9of10-core
+      - name: Mark verified diagnostic tree
+        run: echo "Verified payload is ready on agent/9of10-payload-debug for connector promotion."

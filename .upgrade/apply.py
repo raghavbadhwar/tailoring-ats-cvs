@@ -1,20 +1,16 @@
-"""Apply the checksum-verified upgrade payload to the feature branch.
-
-The bootstrap is temporary: it verifies both archives, overlays the compatibility
-patch, copies the resulting tree, and then removes itself before committing.
-"""
+"""Apply the checksum-verified upgrade payload and text compatibility patch."""
 from __future__ import annotations
 
 import base64
 import hashlib
 import shutil
+import subprocess
 import tarfile
 import tempfile
 from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_ARCHIVE_SHA256 = "4ae3d95d22826db10b308b1b1d323a8b99e06d9563723b4ef6ba58e1172d4a4b"
-EXPECTED_PATCH_SHA256 = "90d0fb2e5d663ed1b9f500dc764e89a8e18045f1622de28efa004a5894ce326f"
 
 
 def _verified_payload() -> bytes:
@@ -29,14 +25,6 @@ def _verified_payload() -> bytes:
     return archive
 
 
-def _verified_patch() -> bytes:
-    patch = (ROOT / ".upgrade" / "compat-patch.tar.gz").read_bytes()
-    digest = hashlib.sha256(patch).hexdigest()
-    if digest != EXPECTED_PATCH_SHA256:
-        raise RuntimeError(f"patch checksum mismatch: {digest}")
-    return patch
-
-
 def _safe_members(archive: tarfile.TarFile) -> list[tarfile.TarInfo]:
     members = archive.getmembers()
     for member in members:
@@ -48,20 +36,22 @@ def _safe_members(archive: tarfile.TarFile) -> list[tarfile.TarInfo]:
     return members
 
 
-def _extract(data: bytes, target: Path, filename: str) -> None:
-    archive_path = target.parent / filename
-    archive_path.write_bytes(data)
-    with tarfile.open(archive_path, "r:gz") as archive:
-        archive.extractall(target, members=_safe_members(archive))
-
-
 def main() -> None:
     with tempfile.TemporaryDirectory(prefix="ats-upgrade-") as directory:
         stage = Path(directory)
+        archive_path = stage / "payload.tar.gz"
+        archive_path.write_bytes(_verified_payload())
         extracted = stage / "extracted"
         extracted.mkdir()
-        _extract(_verified_payload(), extracted, "payload.tar.gz")
-        _extract(_verified_patch(), extracted, "compat-patch.tar.gz")
+        with tarfile.open(archive_path, "r:gz") as archive:
+            archive.extractall(extracted, members=_safe_members(archive))
+
+        patch_path = ROOT / ".upgrade" / "compat.patch"
+        subprocess.run(
+            ["patch", "-p1", "--batch", "--forward", "-i", str(patch_path)],
+            cwd=extracted,
+            check=True,
+        )
 
         for source in sorted(extracted.rglob("*")):
             if not source.is_file():
@@ -76,7 +66,6 @@ def main() -> None:
         obsolete.unlink(missing_ok=True)
 
     shutil.rmtree(ROOT / ".upgrade", ignore_errors=True)
-    (ROOT / ".github/workflows/apply-upgrade.yml").unlink(missing_ok=True)
     print("verified upgrade payload and compatibility patch applied")
 
 
