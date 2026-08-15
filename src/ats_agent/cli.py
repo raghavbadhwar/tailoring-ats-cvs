@@ -133,10 +133,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "benchmark":
-        print(json.dumps(_benchmark_result(args.dataset), indent=2))
+        benchmark_result = _benchmark_result(args.dataset)
+        print(json.dumps(benchmark_result, indent=2))
     elif args.command == "format":
-        result = audit_file(args.resume)
-        print(json.dumps(result, indent=2 if args.json else None))
+        format_result = audit_file(args.resume)
+        print(json.dumps(format_result, indent=2 if args.json else None))
     elif args.command == "audit":
         proposal = _proposal_from_args(args)
         if proposal.get("status") == "draft":
@@ -150,9 +151,9 @@ def main(argv: list[str] | None = None) -> int:
             output.write_text(json.dumps(proposal, indent=2) + "\n", encoding="utf-8")
         print(json.dumps(proposal, indent=2))
     elif args.command == "review":
-        result = _write_review(args)
-        if result is not None:
-            print(json.dumps(result, indent=2))
+        review_result = _write_review(args)
+        if review_result is not None:
+            print(json.dumps(review_result, indent=2))
     else:
         manifest_path = Path(args.approved_changes)
         data = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -165,7 +166,8 @@ def main(argv: list[str] | None = None) -> int:
             )
         if isinstance(data, dict) and (data.get("proposal") or data.get("source")):
             try:
-                print(json.dumps(apply_manifest(manifest_path, approved), indent=2))
+                apply_result = apply_manifest(manifest_path, approved)
+                print(json.dumps(apply_result, indent=2))
             except ValueError as exc:
                 raise SystemExit(f"apply blocked: {exc}") from exc
         else:
