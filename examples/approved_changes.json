@@ -1,5 +1,6 @@
 {
-  "approved_change_ids": ["C1", "C3"],
-  "source": "proposal.json",
-  "notes": "Only explicitly approved IDs may be applied."
+  "proposal": "proposal.json",
+  "approved_change_ids": ["C1"],
+  "output": "tailored-resume.txt",
+  "notes": "Only explicitly approved and evidence-supported IDs may be applied."
 }
