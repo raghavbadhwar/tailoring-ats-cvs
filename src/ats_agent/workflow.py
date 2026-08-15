@@ -4,9 +4,10 @@ import difflib
 import hashlib
 import json
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 from .agents import career_report
+from .docx_patch import patch_docx
 from .evidence import EvidenceItem, EvidenceLedger, EvidenceSource, build_evidence_ledger
 from .formatting import audit_file, audit_text
 from .ingestion import ExtractionError, load, write_docx
@@ -38,7 +39,7 @@ def build_proposal(
     job_description: Path,
     evidence_paths: Iterable[Path] | None = None,
     candidate_id: str = "candidate",
-) -> dict:
+) -> dict[str, Any]:
     resume = _absolute(resume)
     job_description = _absolute(job_description)
     evidence_paths = [_absolute(path) for path in (evidence_paths or [])]
@@ -106,7 +107,7 @@ def _resolve_from(parent: Path, value: str | None) -> Path | None:
     return path.resolve() if path.is_absolute() else (parent / path).resolve()
 
 
-def _ledger_from_proposal(proposal: dict) -> EvidenceLedger:
+def _ledger_from_proposal(proposal: dict[str, Any]) -> EvidenceLedger:
     records = proposal.get("evidence_ledger")
     if not isinstance(records, list):
         raise ValueError("proposal has no evidence ledger")
@@ -127,18 +128,56 @@ def _default_output(source: Path) -> Path:
     return source.with_name(f"{source.stem}.tailored{suffix}")
 
 
-def apply_manifest(manifest_path: Path, approved: list[str]) -> dict:
+def _write_output(
+    source: Path,
+    output: Path,
+    text: str,
+    applied: list[dict[str, Any]],
+    requested_mode: str | None,
+) -> str:
+    source_suffix = source.suffix.lower()
+    output_suffix = output.suffix.lower()
+    mode = (requested_mode or "").strip().lower()
+
+    if output_suffix == ".pdf":
+        raise ValueError(
+            "PDF output requires a genuine PDF renderer; choose DOCX or text output"
+        )
+    if mode not in {"", "preserve", "rebuild", "text"}:
+        raise ValueError(f"unknown document_mode: {requested_mode}")
+    if mode == "preserve" and not (
+        source_suffix == ".docx" and output_suffix == ".docx"
+    ):
+        raise ValueError("preserve mode requires DOCX input and DOCX output")
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    if source_suffix == ".docx" and output_suffix == ".docx" and mode != "rebuild":
+        patch_docx(source, output, applied)
+        return "preserve"
+    if output_suffix == ".docx":
+        write_docx(output, text)
+        return "rebuild"
+
+    output.write_text(text, encoding="utf-8")
+    return "text"
+
+
+def apply_manifest(manifest_path: Path, approved: list[str]) -> dict[str, Any]:
     manifest_path = manifest_path.expanduser().resolve()
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest: dict[str, Any] = json.loads(
+        manifest_path.read_text(encoding="utf-8")
+    )
     proposal_path = _resolve_from(manifest_path.parent, manifest.get("proposal"))
-    proposal = (
+    proposal: dict[str, Any] = (
         json.loads(proposal_path.read_text(encoding="utf-8"))
         if proposal_path
         else manifest
     )
     if proposal.get("status") == "blocked":
         raise ValueError(proposal.get("reason", "proposal is blocked"))
-    if not isinstance(approved, list) or not all(isinstance(item, str) for item in approved):
+    if not isinstance(approved, list) or not all(
+        isinstance(item, str) for item in approved
+    ):
         raise ValueError("approved_change_ids must be a list of strings")
 
     source = _resolve_from(
@@ -158,23 +197,28 @@ def apply_manifest(manifest_path: Path, approved: list[str]) -> dict:
 
     text = load(source)["text"]
     original = text
-    applied: list[dict] = []
+    applied: list[dict[str, Any]] = []
     for change_id in approved:
         change = changes[change_id]
         validate_change(change, ledger)
         if change.get("operation") not in {None, "replace", "replace_span"}:
             raise ValueError(
-                f"change {change_id} uses unsupported operation: {change.get('operation')}"
+                f"change {change_id} uses unsupported operation: "
+                f"{change.get('operation')}"
             )
-        expected = change.get("expected_text", change.get("from", ""))
-        replacement = change.get("replacement_text", change.get("to", ""))
-        matches = [i for i in range(len(text)) if text.startswith(expected, i)]
+        expected = str(change.get("expected_text", change.get("from", "")))
+        replacement = str(change.get("replacement_text", change.get("to", "")))
+        matches = [
+            index
+            for index in range(len(text))
+            if text.startswith(expected, index)
+        ]
         if len(matches) == 0:
             raise ValueError(f"change {change_id} expected text was not found")
         if len(matches) > 1:
             raise ValueError(f"change {change_id} is ambiguous: {len(matches)} matches")
         start = matches[0]
-        text = text[:start] + replacement + text[start + len(expected):]
+        text = text[:start] + replacement + text[start + len(expected) :]
         applied.append(
             {
                 "id": change_id,
@@ -200,16 +244,14 @@ def apply_manifest(manifest_path: Path, approved: list[str]) -> dict:
         raise ValueError("could not determine output path")
     if output.resolve() == source.resolve():
         raise ValueError("output must not overwrite the source")
-    if output.suffix.lower() == ".pdf":
-        raise ValueError(
-            "PDF output requires a genuine PDF renderer; choose DOCX or text output"
-        )
 
-    output.parent.mkdir(parents=True, exist_ok=True)
-    if output.suffix.lower() == ".docx":
-        write_docx(output, text)
-    else:
-        output.write_text(text, encoding="utf-8")
+    document_mode = _write_output(
+        source,
+        output,
+        text,
+        applied,
+        manifest.get("document_mode"),
+    )
 
     output_text = load(output)["text"]
     if output_text != text:
@@ -233,6 +275,7 @@ def apply_manifest(manifest_path: Path, approved: list[str]) -> dict:
         "applied_changes": applied,
         "source": str(source),
         "output": str(output),
+        "document_mode": document_mode,
         "source_overwrite": False,
         "source_sha256": _sha(source),
         "output_sha256": _sha(output),
