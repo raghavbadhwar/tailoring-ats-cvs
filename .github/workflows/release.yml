@@ -37,11 +37,20 @@ jobs:
       - name: Materialize protected private holdout
         env:
           PRIVATE_HOLDOUT_B64: ${{ secrets.PRIVATE_HOLDOUT_B64 }}
-        shell: bash
         run: |
-          test -n "$PRIVATE_HOLDOUT_B64"
-          printf '%s' "$PRIVATE_HOLDOUT_B64" | base64 --decode > /tmp/private-holdout.jsonl
-          test -s /tmp/private-holdout.jsonl
+          python - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+          encoded = os.environ.get("PRIVATE_HOLDOUT_B64", "")
+          if not encoded:
+              raise SystemExit("PRIVATE_HOLDOUT_B64 is not configured in the protected release environment")
+          payload = base64.b64decode(encoded, validate=True)
+          path = Path("/tmp/private-holdout.jsonl")
+          path.write_bytes(payload)
+          if not path.stat().st_size:
+              raise SystemExit("private holdout is empty")
+          PY
       - name: Run release gates and protected holdout
         run: python scripts/release_check.py --private-holdout /tmp/private-holdout.jsonl > release-check.json
       - name: Run security gates
