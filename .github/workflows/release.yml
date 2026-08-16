@@ -56,7 +56,7 @@ jobs:
       - name: Run security gates
         run: |
           pip-audit --local
-          bandit -r src/ats_agent -q
+          bandit -r src/ats_agent -q -ll
       - name: Build wheel and source distribution
         run: python -m build
       - name: Clean-install wheel outside repository
