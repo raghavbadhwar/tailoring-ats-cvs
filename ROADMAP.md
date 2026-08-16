@@ -1,24 +1,34 @@
 # Roadmap
 
-## v1.1 — current foundation
+## v1.0.0-beta.1 — trustworthy engineering beta
 
-- CI for skill validation, tests, and Python lint/compile checks.
-- Versioned benchmark case schema with hallucination and evidence-preservation metrics.
-- Dependency-free CLI contract for `audit`, `propose`, and approval-gated `apply`.
-- Deterministic multi-agent report contract spanning ATS, role, language, recruiter, hiring-manager, and evidence review.
-- Formatting audit for extractable text, reading order, spacing, bullets, and section headings.
-- Integration boundaries for skill-compatible clients.
+Implemented on the `agent/trustworthy-v1` release branch:
 
-## v1.2 — evidence adapters
+- Candidate-scoped provenance ledger, atomic claims, metric/unit/scope binding, and ownership protection.
+- Clause-level requirement extraction, hard-gate evaluation, and requirement-to-evidence mapping.
+- Evidence-backed conservative, balanced, and compact rewrite variants behind deterministic validation.
+- Digest-bound explicit approval, redacted/full review bundles, transactional apply, and audit receipts.
+- TXT/Markdown/DOCX output with DOCX preserve/rebuild modes and malformed-input limits.
+- Benchmark v3 public, adversarial, document, smoke, and human-evaluation queue infrastructure.
+- Linux and Windows compatibility matrix for Python 3.10–3.13.
+- Dedicated dependency, Bandit, CodeQL, secret-scan, SBOM, clean-wheel, and protected release gates.
 
-- Read-only PDF/DOCX/TXT extraction adapters with per-file diagnostics.
-- Deterministic requirement/evidence matrix and change proposal serialization.
-- Golden fixtures with anonymized CV/JD pairs and human-reviewed expected outcomes.
+Beta publication remains fail-closed until the protected 60-case private holdout is configured in the GitHub `release` environment and passes the release workflow.
 
-## v2.0 — reviewed integrations
+## v1.0 — stable release criteria
 
-- Optional Codex/ChatGPT and Claude loaders.
-- VS Code command surface and local web dashboard backed by the same CLI contract.
-- Human evaluation study before claiming improvement in screening outcomes.
+- Complete the 25-pair anonymized real-document pilot.
+- At least 95% of pilot DOCX outputs pass visual review without manual repair.
+- Approved-change correction rate remains below 10% in the pilot.
+- Complete the blinded 50-pair human rewrite evaluation and publish the methodology/results separately from automated benchmark scores.
+- Resolve any P0/P1 safety defects found by the private holdout, pilot, or human evaluation.
+- Promote only the exact beta lineage that passes all stable-release gates.
 
-Out of scope until evidence supports it: automatic application submission, a universal ATS score, and autonomous edits.
+## Later, only after v1.0 safety gates
+
+- Authenticated local web application.
+- VS Code integration.
+- Additional document templates.
+- Opt-in official-company context retrieval.
+
+Out of scope: automatic application submission, autonomous approval, and universal ATS or employer-acceptance scores.

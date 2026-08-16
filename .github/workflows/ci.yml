@@ -4,17 +4,147 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
-  validate:
+  quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
-          python-version: "3.11"
+          python-version: "3.12"
+          cache: pip
+      - name: Install project and development dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,documents]"
+      - name: Check release tree integrity
+        run: python scripts/check_release_tree.py
       - name: Validate skill and benchmark fixtures
-        run: python scripts/validate_skill.py
-      - name: Run tests
-        run: python -m unittest discover -s tests -v
+        run: |
+          python scripts/validate_skill.py
+          python scripts/validate_benchmark_diversity.py
+      - name: Check repository whitespace
+        run: git diff --check
+      - name: Lint
+        run: ruff check src tests scripts
+      - name: Type check
+        run: mypy src/ats_agent
+      - name: Test, benchmark, and CLI workflow with branch coverage
+        shell: bash
+        run: |
+          coverage run --source=ats_agent -m unittest discover -s tests -v
+          coverage run --append --source=ats_agent scripts/check_benchmark.py
+          run_dir="$(mktemp -d)"
+          coverage run --append --source=ats_agent -m ats_agent.cli doctor > /dev/null
+          coverage run --append --source=ats_agent -m ats_agent.cli format examples/sample_resume.txt > /dev/null
+          coverage run --append --source=ats_agent -m ats_agent.cli propose \
+            examples/sample_resume.txt examples/sample_job.md \
+            --evidence examples/sample_project_bank.md \
+            --candidate-id coverage-candidate \
+            --output "$run_dir/proposal.json" > /dev/null
+          coverage run --append --source=ats_agent -m ats_agent.cli review \
+            "$run_dir/proposal.json" \
+            --markdown "$run_dir/review.md" \
+            --html "$run_dir/review.html" \
+            --output-document tailored-resume.txt > /dev/null
+          selection="$(python - "$run_dir/proposal.json" <<'PY'
+          import json
+          import sys
+          proposal = json.load(open(sys.argv[1], encoding="utf-8"))
+          change = next(item for item in proposal["changes"] if item.get("supported"))
+          print(f"{change['id']}:{change.get('default_variant') or change['variants'][0]['id']}")
+          PY
+          )"
+          coverage run --append --source=ats_agent -m ats_agent.cli approve \
+            "$run_dir/proposal.json" \
+            --select "$selection" \
+            --output "$run_dir/approval.json" \
+            --output-document tailored-resume.txt > /dev/null
+          coverage run --append --source=ats_agent -m ats_agent.cli apply \
+            "$run_dir/approval.json" > /dev/null
+          coverage run --append --source=ats_agent -m ats_agent.cli validate \
+            "$run_dir/tailored-resume.txt" > /dev/null
+          coverage run --append --source=ats_agent -m ats_agent.cli benchmark \
+            --suite smoke --report "$run_dir/smoke.json" > /dev/null
+          coverage report --show-missing --fail-under=90
+      - name: Audit Python dependencies
+        run: pip-audit --local
       - name: Compile Python sources
         run: python -m compileall -q src scripts tests
+      - name: Build distributions
+        run: python -m build
+      - name: Test installed wheel outside repository
+        run: |
+          python -m venv /tmp/ats-wheel-test
+          /tmp/ats-wheel-test/bin/python -m pip install --upgrade pip
+          /tmp/ats-wheel-test/bin/python -m pip install dist/*.whl
+          cd /tmp
+          /tmp/ats-wheel-test/bin/ats-agent --help
+          /tmp/ats-wheel-test/bin/ats-agent benchmark --suite smoke > benchmark.json
+          /tmp/ats-wheel-test/bin/python - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(Path("benchmark.json").read_text())
+          assert result["case_count"] >= 8
+          assert result["schema_version"] == 3
+          PY
+      - name: Run approval-gated example end to end
+        shell: bash
+        run: |
+          run_dir="$(mktemp -d)"
+          ats-agent propose \
+            examples/sample_resume.txt \
+            examples/sample_job.md \
+            --evidence examples/sample_project_bank.md \
+            --candidate-id sample-candidate \
+            --output "$run_dir/proposal.json"
+          ats-agent review "$run_dir/proposal.json" \
+            --markdown "$run_dir/review.md" \
+            --html "$run_dir/review.html" \
+            --output-document tailored-resume.txt
+          test -s "$run_dir/review.md"
+          test -s "$run_dir/review.html"
+          grep -q "Requirement-to-Evidence Matrix" "$run_dir/review.md"
+          selection="$(python - "$run_dir/proposal.json" <<'PY'
+          import json
+          import sys
+          proposal = json.load(open(sys.argv[1], encoding="utf-8"))
+          change = next(item for item in proposal["changes"] if item.get("supported"))
+          print(f"{change['id']}:{change.get('default_variant') or change['variants'][0]['id']}")
+          PY
+          )"
+          ats-agent approve "$run_dir/proposal.json" \
+            --select "$selection" \
+            --output "$run_dir/approved_changes.json" \
+            --output-document tailored-resume.txt
+          ats-agent apply "$run_dir/approved_changes.json" > "$run_dir/apply-result.json"
+          test -f "$run_dir/tailored-resume.txt"
+          test -f "$run_dir/tailored-resume.txt.applied.json"
+          grep -qi "workflow automation" "$run_dir/tailored-resume.txt"
+          grep -q "Helped build automated order workflows" examples/sample_resume.txt
+
+  compatibility:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install package
+        run: python -m pip install ".[documents]"
+      - name: Run unit and integration tests
+        run: python -m unittest discover -s tests -v
+      - name: Smoke installed CLI
+        run: |
+          ats-agent --help
+          ats-agent benchmark --suite smoke
