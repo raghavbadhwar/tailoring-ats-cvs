@@ -71,6 +71,45 @@ _PUBLIC_GATE_SPECS: tuple[tuple[str, str, str, str], ...] = (
     ),
 )
 
+_CASE_CONTEXTS = (
+    "regional expansion brief",
+    "quarterly operating review",
+    "new market launch",
+    "service quality review",
+    "customer onboarding redesign",
+    "inventory cadence review",
+    "vendor performance cycle",
+    "budget planning round",
+    "campus growth initiative",
+    "international rollout brief",
+    "pricing review cycle",
+    "support quality sprint",
+    "capacity planning round",
+    "governance refresh",
+    "forecast review",
+    "delivery planning cycle",
+    "commercial diligence sprint",
+    "risk review round",
+    "process quality review",
+    "customer retention brief",
+    "cost control initiative",
+    "launch readiness cycle",
+    "operations handoff review",
+    "growth planning sprint",
+    "portfolio review cycle",
+    "service redesign brief",
+    "quality assurance round",
+    "regional planning forum",
+    "customer adoption review",
+    "delivery readiness brief",
+    "operating cadence refresh",
+    "commercial planning round",
+    "cost efficiency review",
+    "market entry brief",
+    "service reliability cycle",
+    "quarterly planning forum",
+)
+
 
 def _benchmark_term(term: str) -> str:
     """Use equivalent punctuation-safe wording without changing the label."""
@@ -86,11 +125,12 @@ def _expand_public_spec(spec: dict[str, Any]) -> dict[str, Any]:
     supported = str(spec["supported"])
     unsupported = str(spec["unsupported"])
     evidence_term = str(spec["evidence_term"])
+    context = str(spec["context"])
     supported_text = _benchmark_term(supported)
     unsupported_text = _benchmark_term(unsupported)
     clause_one = f"{supported_text} is required for the assignment"
     clause_two = f"{unsupported_text} is preferred for a separate workstream"
-    job_description = f"{clause_one}; {clause_two}. {gate_text}"
+    job_description = f"{clause_one}; {clause_two}. {gate_text} Context: {context}."
     first_start = job_description.find(clause_one)
     second_start = job_description.find(clause_two)
     gate_start = job_description.find(gate_text)
@@ -208,6 +248,7 @@ def _expand_public_matrix(spec: dict[str, Any]) -> list[dict[str, Any]]:
                         "domain": domains[index % len(domains)],
                         "verb": verbs[index % len(verbs)],
                         "task": tasks[(index * 7) % len(tasks)],
+                        "context": _CASE_CONTEXTS[index % len(_CASE_CONTEXTS)],
                         "gate_index": index % len(_PUBLIC_GATE_SPECS),
                     }
                 )
