@@ -7,7 +7,8 @@ import zipfile
 from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
-from xml.etree import ElementTree
+
+from defusedxml import ElementTree
 
 SUPPORTED = {
     ".txt",
