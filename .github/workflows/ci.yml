@@ -23,19 +23,20 @@ jobs:
       - name: Check release tree integrity
         run: python scripts/check_release_tree.py
       - name: Validate skill and benchmark fixtures
-        run: python scripts/validate_skill.py
+        run: |
+          python scripts/validate_skill.py
+          python scripts/validate_benchmark_diversity.py
       - name: Check repository whitespace
         run: git diff --check
       - name: Lint
         run: ruff check src tests scripts
       - name: Type check
         run: mypy src/ats_agent
-      - name: Test with coverage
+      - name: Test and benchmark with branch coverage
         run: |
           coverage run --source=ats_agent -m unittest discover -s tests -v
-          coverage report --show-missing --fail-under=80
-      - name: Run safety benchmark gates
-        run: python scripts/check_benchmark.py
+          coverage run --append --source=ats_agent scripts/check_benchmark.py
+          coverage report --show-missing --fail-under=90
       - name: Audit Python dependencies
         run: pip-audit --local
       - name: Compile Python sources
@@ -44,16 +45,19 @@ jobs:
         run: python -m build
       - name: Test installed wheel outside repository
         run: |
-          python -m pip install --force-reinstall dist/*.whl
+          python -m venv /tmp/ats-wheel-test
+          /tmp/ats-wheel-test/bin/python -m pip install --upgrade pip
+          /tmp/ats-wheel-test/bin/python -m pip install dist/*.whl
           cd /tmp
-          ats-agent --help
-          ats-agent benchmark > benchmark.json
-          python - <<'PY'
+          /tmp/ats-wheel-test/bin/ats-agent --help
+          /tmp/ats-wheel-test/bin/ats-agent benchmark --suite smoke > benchmark.json
+          /tmp/ats-wheel-test/bin/python - <<'PY'
           import json
           from pathlib import Path
 
           result = json.loads(Path("benchmark.json").read_text())
-          assert result["case_count"] >= 3
+          assert result["case_count"] >= 8
+          assert result["schema_version"] == 3
           PY
       - name: Run approval-gated example end to end
         run: |
@@ -71,37 +75,17 @@ jobs:
           test -s "$run_dir/review.md"
           test -s "$run_dir/review.html"
           grep -q "Requirement-to-Evidence Matrix" "$run_dir/review.md"
-          grep -q "Download approval manifest" "$run_dir/review.html"
-          python - "$run_dir/proposal.json" "$run_dir/approved_changes.json" <<'PY'
+          ats-agent approve "$run_dir/proposal.json" \
+            --select "$(python - "$run_dir/proposal.json" <<'PY'
           import json
           import sys
-          from pathlib import Path
-
-          proposal_path = Path(sys.argv[1])
-          manifest_path = Path(sys.argv[2])
-          proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
-          change = next(
-              item for item in proposal["changes"] if item.get("supported")
-          )
-          variant_id = (
-              change.get("default_variant") or change["variants"][0]["id"]
-          )
-          manifest = {
-              "schema_version": 2,
-              "proposal": proposal_path.name,
-              "proposal_digest": proposal["proposal_digest"],
-              "selections": [
-                  {"change_id": change["id"], "variant_id": variant_id}
-              ],
-              "approved_change_ids": [change["id"]],
-              "document_mode": "preserve",
-              "output": "tailored-resume.txt",
-          }
-          manifest_path.write_text(
-              json.dumps(manifest, indent=2) + "\n",
-              encoding="utf-8",
-          )
+          proposal = json.load(open(sys.argv[1], encoding="utf-8"))
+          change = next(item for item in proposal["changes"] if item.get("supported"))
+          print(f"{change['id']}:{change.get('default_variant') or change['variants'][0]['id']}")
           PY
+          )" \
+            --output "$run_dir/approved_changes.json" \
+            --output-document tailored-resume.txt
           (
             cd "$run_dir"
             ats-agent apply approved_changes.json > apply-result.json
@@ -112,10 +96,11 @@ jobs:
           grep -q "Helped build automated order workflows" examples/sample_resume.txt
 
   compatibility:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v7
@@ -124,11 +109,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
       - name: Install package
-        run: python -m pip install .
+        run: python -m pip install ".[documents]"
       - name: Run unit and integration tests
         run: python -m unittest discover -s tests -v
       - name: Smoke installed CLI
         run: |
-          cd /tmp
           ats-agent --help
-          ats-agent benchmark
+          ats-agent benchmark --suite smoke
