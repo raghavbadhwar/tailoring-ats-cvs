@@ -2,37 +2,32 @@
 
 An approval-first tool that reads a candidate CV, a job description, and optional supporting evidence; maps requirements to traceable candidate facts; proposes safe role-aligned rewrites; and applies only explicitly approved changes to a new output document.
 
-It does **not** invent qualifications, autonomously submit applications, or claim a universal ATS acceptance score.
+It does **not** invent qualifications, autonomously submit applications, or claim a universal ATS score, interview probability, or employer-acceptance probability.
 
-## Release integrity
+## Release status
 
-The active upgrade is maintained as ordinary, reviewable source code. CI fails closed when it detects encoded release payloads or workflows that reconstruct and push replacement source trees. Before running tests or packaging, CI executes `python scripts/check_release_tree.py` and then validates the exact checked-out commit across Python 3.10, 3.11, 3.12, and 3.13.
+The trustworthy v1 engineering line is prepared as `1.0.0b1`. Beta publication is fail-closed: the branch must pass CI, security, Benchmark v3, cross-platform compatibility, clean-wheel installation, and a protected 60-case private holdout before the `v1.0.0-beta.1` tag can publish a GitHub prerelease.
 
-The committed benchmark is an internal deterministic regression suite. Its results measure implementation consistency on labelled fixtures; they are not evidence of employer acceptance, human rewrite preference, or general performance across every ATS.
+The active upgrade is ordinary, reviewable source code. CI rejects encoded source payloads and workflows that reconstruct and push replacement source trees.
 
 ## What works
 
 - TXT, Markdown, HTML, RTF, DOCX, and optional text-based PDF ingestion
-- extraction-quality diagnostics and safe blocking
-- candidate-scoped evidence ledger with source spans and ownership levels
-- deterministic hard-gate extraction for degree, graduation year, experience, work authorization, sponsorship, grade, work mode, and travel
-- requirement-to-evidence mapping with direct, transferable, and unsupported states
+- candidate-scoped artifact hashes and evidence provenance
+- atomic claims with metric value/unit/scope and ownership binding
+- clause-level requirement extraction and hard-gate evaluation
+- requirement-to-evidence mapping with direct, equivalent/transferable, unsupported, and conservative unknown handling
 - conservative, balanced, and compact evidence-backed rewrite variants
-- unsupported skill, metric, employer, status, and ownership-escalation blocking
-- human approval manifest and self-contained local review HTML
-- exact, stale, ambiguous, conflicting, and no-op validation
-- structure-preserving DOCX patch mode and ATS-safe rebuild mode
-- final re-parse, formatting audit, hashes, diff, and applied-change log
-- 100-case offline deterministic regression suite with enforced CI thresholds
-- Python 3.10, 3.11, 3.12, and 3.13 compatibility checks
+- deterministic blocking of unsupported skills, metrics, employers, protected status, and ownership escalation
+- canonical proposal digest and explicit digest-bound approval manifests
+- full and redacted Markdown/HTML review bundles
+- transactional TXT/Markdown/DOCX apply with source-overwrite and existing-output protection
+- DOCX preserve/rebuild modes, post-write reparse, diff, hashes, and applied-change receipts
+- Benchmark v3 public, adversarial, document, smoke, and human-evaluation queue infrastructure
+- Python 3.10–3.13 compatibility on Linux and Windows
+- dependency audit, Bandit, CodeQL, dependency review, secret-pattern scan, and CycloneDX SBOM generation
 
 ## Install
-
-```bash
-python -m pip install -e .
-```
-
-PDF input requires the optional document extra:
 
 ```bash
 python -m pip install -e '.[documents]'
@@ -44,36 +39,49 @@ Development environment:
 python -m pip install -e '.[dev,documents]'
 ```
 
-Optional local commit hooks:
-
-```bash
-python -m pip install pre-commit
-pre-commit install
-```
-
 ## End-to-end workflow
 
 ### 1. Prepare a proposal and review bundle
 
 ```bash
 ats-agent prepare resume.docx job-description.md \
-  --candidate-id raghav-badhwar \
+  --candidate-id candidate-1 \
   --evidence master-project-bank.docx \
   --company-context official-company-context.md \
   --out run/
 ```
 
-This writes:
+This writes a proposal and review artifacts. The proposal contains source hashes, the evidence ledger, requirement mappings, hard-gate results, proposed changes, variants, and a canonical digest.
 
-```text
-run/proposal.json
-run/proposal.md
-run/review.html
+### 2. Create explicit approval
+
+```bash
+ats-agent approve run/proposal.json \
+  --select C1:balanced \
+  --select C3:compact \
+  --output run/approval-manifest.json \
+  --output-document run/tailored-resume.docx
 ```
 
-Open `review.html`, inspect evidence and variants, then download `approval-manifest.json`.
+Approval creates a manifest only. It does not edit the CV.
 
-An existing proposal can also be rendered explicitly:
+### 3. Apply approved changes
+
+```bash
+ats-agent apply run/approval-manifest.json
+```
+
+The source is never overwritten. Apply rechecks the proposal digest and all artifact hashes, writes a temporary output, reparses and verifies it, and atomically promotes it only after validation succeeds.
+
+### 4. Validate the output
+
+```bash
+ats-agent validate run/tailored-resume.docx
+```
+
+## Review modes
+
+Render an existing proposal:
 
 ```bash
 ats-agent review run/proposal.json \
@@ -82,19 +90,7 @@ ats-agent review run/proposal.json \
   --output-document run/tailored-resume.docx
 ```
 
-### 2. Apply approved changes
-
-```bash
-ats-agent apply run/approval-manifest.json
-```
-
-The source is never overwritten. The command creates a tailored document and an `.applied.json` audit log.
-
-### 3. Validate the output
-
-```bash
-ats-agent validate run/tailored-resume.docx
-```
+Use `--redacted` for a shareable review that removes candidate content and paths and disables approval controls.
 
 ## Other commands
 
@@ -103,94 +99,84 @@ ats-agent doctor
 ats-agent audit resume.docx job.md --candidate-id candidate-1
 ats-agent propose resume.docx job.md --output proposal.json
 ats-agent format resume.docx
-ats-agent benchmark
-ats-agent benchmark --dataset benchmarks/datasets/cases_v2.jsonl
+ats-agent benchmark --suite smoke
+ats-agent benchmark --suite public --report benchmarks/v3/reports/public.json
+ats-agent benchmark --suite adversarial --report benchmarks/v3/reports/adversarial.json
+ats-agent benchmark --suite documents --report benchmarks/v3/reports/documents.json
 ```
-
-## Approval manifest
-
-```json
-{
-  "proposal": "proposal.json",
-  "selections": [
-    {"change_id": "C1", "variant_id": "balanced"},
-    {"change_id": "C3", "variant_id": "compact"}
-  ],
-  "approved_change_ids": ["C1", "C3"],
-  "document_mode": "preserve",
-  "output": "tailored-resume.docx"
-}
-```
-
-`document_mode` can be:
-
-- `preserve`: patch a DOCX while retaining its package, paragraph styles, headers, footers, hyperlinks, and unrelated content;
-- `rebuild`: create a clean one-column ATS-safe DOCX from extracted text.
-
-The legacy `mode` field remains accepted for backward compatibility. PDF is input-only unless a genuine PDF renderer is added. The tool never writes plain text to a fake `.pdf` file.
 
 ## Safety model
 
-The job description is vocabulary, not evidence. A supported change must reference real evidence IDs from the same candidate ledger. The validator blocks:
+The job description and company context are vocabulary/context sources, not candidate evidence. Every factual rewrite must remain inside the candidate evidence boundary. The validator blocks unknown or cross-candidate evidence, ownership escalation, unsupported numbers/entities/status claims, stale proposals, tampered approvals, ambiguous/conflicting anchors, unsupported output formats, and source overwrites.
 
-- unknown or cross-candidate evidence;
-- stronger ownership than the evidence supports;
-- new numbers, employers, skills, certifications, users, customers, revenue, or production status;
-- stale proposals;
-- missing, ambiguous, conflicting, or no-op edits;
-- source overwrites.
+PDF is input-only unless a genuine renderer is added. Scanned/image-only PDFs are blocked rather than silently OCRed.
 
-See [`docs/threat-model.md`](docs/threat-model.md) for assets, trust boundaries, threats, controls, and residual risks.
+See `docs/threat-model.md` and `docs/evidence-model.md` for the detailed model.
 
-## Benchmark and quality gates
+## Benchmark v3
+
+Benchmark v3 separates development/regression evidence from real-world outcome claims. Public reports contain exact code SHA, dataset SHA-256, environment metadata, denominators, confidence intervals, baselines, and explicit `not_measured` states for human preference or parser-risk metrics that have not been genuinely measured.
 
 ```bash
-python scripts/generate_benchmark.py
+python scripts/validate_benchmark_diversity.py
 python scripts/check_benchmark.py
 ```
 
-The committed dataset contains 100 deterministic regression cases across supported skills, supporting evidence, unsupported qualifications, graduation and degree gates, experience gates, ownership escalation, and forbidden rewrite terms. These fixtures protect known behavior; they are not a substitute for an independent holdout or human-labelled evaluation.
+The release path uses:
 
-CI enforces:
+- a 180-case balanced public development suite;
+- a 60-case adversarial safety suite;
+- a 30-case document suite;
+- a packaged smoke suite;
+- a 50-pair blinded human-evaluation queue;
+- a separate 60-case private holdout supplied only to the protected GitHub `release` environment.
+
+The private cases are never committed to the public repository or uploaded as release assets.
+
+## CI and release gates
+
+Pull requests run:
 
 - visible-source release-tree integrity;
-- portable skill and example validation;
-- whitespace and Ruff checks;
-- Mypy type checking;
-- at least 80% branch-aware test coverage;
-- 100-case deterministic regression thresholds;
+- benchmark fixture and diversity validation;
+- Ruff and Mypy;
+- tests plus Benchmark v3 under at least 90% branch coverage;
 - dependency auditing;
-- source compilation;
-- wheel build and installation outside the repository;
-- the documented proposal → review → approval → apply workflow;
-- Python 3.10, 3.11, 3.12, and 3.13 compatibility.
+- package build and clean-wheel installation;
+- approval-gated end-to-end smoke tests;
+- Python 3.10–3.13 on Ubuntu and Windows;
+- Bandit, CodeQL, dependency review, secret-pattern scanning, and SBOM generation.
+
+The tag-triggered release workflow additionally requires the protected private holdout before publishing a prerelease. See `docs/release-process.md`.
 
 ## Repository map
 
 ```text
 src/ats_agent/
-  agents.py          explainable recruiter and hiring-manager reports
-  benchmark.py       measured regression and safety metrics
-  cli.py             user-facing commands
-  documents.py       anchored text and DOCX editing
-  evidence.py        candidate-scoped provenance ledger
-  formatting.py      parser-risk diagnostics
-  ingestion.py       safe document extraction
-  reporting.py       primary Markdown and HTML review bundles
-  reports.py         backward-compatible review renderers
-  requirements.py    JD requirements, hard gates, and evidence mapping
-  rewriting.py       protected rewrite variants
-  validation.py      deterministic factual guardrails
-  workflow.py        PROPOSE → APPROVE → APPLY orchestration
+  agents.py                 explainable recruiter/hiring-manager reports
+  artifacts.py              candidate-scoped artifact registry
+  benchmark.py              Benchmark v3 public API
+  _benchmark_*.py           suite loading, metrics, validation, runners
+  cli.py                    user-facing commands
+  documents.py              transactional text and DOCX editing
+  evidence.py               candidate-scoped evidence and atomic claims
+  formatting.py             parser-risk diagnostics
+  hashing.py                canonical digests and SHA-256 helpers
+  ingestion.py              safe document extraction
+  models.py                 typed proposal/approval schemas
+  providers.py              deterministic/optional rewrite provider contracts
+  requirements.py           JD requirements, hard gates, evidence mapping
+  review.py                 canonical Markdown/HTML/approval renderer
+  rewriting.py              protected section-aware rewrite variants
+  validation.py             deterministic factual guardrails
+  workflow.py               PROPOSE → APPROVE → APPLY orchestration
 ```
 
 ## Known limits
 
-- Semantic matching is deterministic and taxonomy-based by default; it is intentionally conservative.
-- Text-based PDF input requires `pypdf`; scanned PDFs are blocked rather than OCRed silently.
-- Preserve mode retains the DOCX package and unrelated styling, but complex mixed-format paragraphs should be visually reviewed.
-- Company-language alignment uses only user-supplied context in the current local-first release.
-- The current benchmark is a deterministic regression suite rather than an independent generalization study.
-- Human preference and real hiring-outcome studies are not yet available, so the project makes no acceptance-rate claim.
+- Default semantic matching is deterministic and deliberately conservative.
+- Complex unsupported DOCX structures fail explicitly or require visual review rather than being silently flattened.
+- Human preference and real hiring outcomes are separate validation studies; automated benchmark scores are not substitutes for them.
+- Stable `v1.0.0` requires the anonymized real-document pilot and blinded human evaluation described in `ROADMAP.md`.
 
-See `docs/architecture.md`, `docs/evidence-model.md`, `docs/privacy.md`, `docs/threat-model.md`, `SECURITY.md`, and `ROADMAP.md`.
+See `docs/architecture.md`, `docs/evidence-model.md`, `docs/privacy.md`, `docs/threat-model.md`, `docs/benchmark-methodology.md`, `docs/release-process.md`, `SECURITY.md`, and `ROADMAP.md`.
