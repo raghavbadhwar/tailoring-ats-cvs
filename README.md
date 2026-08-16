@@ -4,6 +4,12 @@ An approval-first tool that reads a candidate CV, a job description, and optiona
 
 It does **not** invent qualifications, autonomously submit applications, or claim a universal ATS acceptance score.
 
+## Release integrity
+
+The active upgrade is maintained as ordinary, reviewable source code. CI fails closed when it detects encoded release payloads or workflows that reconstruct and push replacement source trees. Before running tests or packaging, CI executes `python scripts/check_release_tree.py` and then validates the exact checked-out commit across Python 3.10, 3.11, 3.12, and 3.13.
+
+The committed benchmark is an internal deterministic regression suite. Its results measure implementation consistency on labelled fixtures; they are not evidence of employer acceptance, human rewrite preference, or general performance across every ATS.
+
 ## What works
 
 - TXT, Markdown, HTML, RTF, DOCX, and optional text-based PDF ingestion
@@ -17,8 +23,8 @@ It does **not** invent qualifications, autonomously submit applications, or clai
 - exact, stale, ambiguous, conflicting, and no-op validation
 - structure-preserving DOCX patch mode and ATS-safe rebuild mode
 - final re-parse, formatting audit, hashes, diff, and applied-change log
-- 100-case offline safety benchmark with enforced CI thresholds
-- Python 3.10, 3.12, and 3.13 compatibility checks
+- 100-case offline deterministic regression suite with enforced CI thresholds
+- Python 3.10, 3.11, 3.12, and 3.13 compatibility checks
 
 ## Install
 
@@ -143,29 +149,29 @@ python scripts/generate_benchmark.py
 python scripts/check_benchmark.py
 ```
 
-The committed dataset contains 100 deterministic cases across supported skills, supporting evidence, unsupported qualifications, graduation and degree gates, experience gates, ownership escalation, and forbidden rewrite terms. Metrics are transparent engineering measures—not employer acceptance predictions.
+The committed dataset contains 100 deterministic regression cases across supported skills, supporting evidence, unsupported qualifications, graduation and degree gates, experience gates, ownership escalation, and forbidden rewrite terms. These fixtures protect known behavior; they are not a substitute for an independent holdout or human-labelled evaluation.
 
 CI enforces:
 
+- visible-source release-tree integrity;
 - portable skill and example validation;
 - whitespace and Ruff checks;
 - Mypy type checking;
 - at least 80% branch-aware test coverage;
-- 100-case benchmark safety thresholds;
+- 100-case deterministic regression thresholds;
 - dependency auditing;
 - source compilation;
 - wheel build and installation outside the repository;
 - the documented proposal → review → approval → apply workflow;
-- Python 3.10, 3.12, and 3.13 compatibility.
+- Python 3.10, 3.11, 3.12, and 3.13 compatibility.
 
 ## Repository map
 
 ```text
 src/ats_agent/
   agents.py          explainable recruiter and hiring-manager reports
-  benchmark.py       measured safety and coverage metrics
+  benchmark.py       measured regression and safety metrics
   cli.py             user-facing commands
-  document_model.py  normalized resume structure
   documents.py       anchored text and DOCX editing
   evidence.py        candidate-scoped provenance ledger
   formatting.py      parser-risk diagnostics
@@ -184,6 +190,7 @@ src/ats_agent/
 - Text-based PDF input requires `pypdf`; scanned PDFs are blocked rather than OCRed silently.
 - Preserve mode retains the DOCX package and unrelated styling, but complex mixed-format paragraphs should be visually reviewed.
 - Company-language alignment uses only user-supplied context in the current local-first release.
+- The current benchmark is a deterministic regression suite rather than an independent generalization study.
 - Human preference and real hiring-outcome studies are not yet available, so the project makes no acceptance-rate claim.
 
 See `docs/architecture.md`, `docs/evidence-model.md`, `docs/privacy.md`, `docs/threat-model.md`, `SECURITY.md`, and `ROADMAP.md`.
