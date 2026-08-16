@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -34,6 +36,17 @@ class ReleaseIntegrityTests(unittest.TestCase):
         self.assertIn("actions/setup-python@v7", workflow_text)
         self.assertNotIn("actions/checkout@v4", workflow_text)
         self.assertNotIn("actions/setup-python@v5", workflow_text)
+
+    def test_release_tree_check_script_passes(self) -> None:
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "check_release_tree.py")],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+        self.assertIn("release tree integrity passed", result.stdout)
 
 
 if __name__ == "__main__":
