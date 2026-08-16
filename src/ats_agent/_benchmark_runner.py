@@ -104,7 +104,7 @@ def run_cases(
         parsed_expected = sum(bool(case.get("expected_parse")) for case in cases)
         parsed_success = sum(
             bool(result["parsed"]) and bool(case.get("expected_parse"))
-            for case, result in zip(cases, case_results)
+            for case, result in zip(cases, case_results, strict=True)
         )
         metrics = {
             "document_case_pass_rate": _metric(passed, len(case_results)),
