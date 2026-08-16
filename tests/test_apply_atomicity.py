@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from ats_agent.documents import patch_document
 from ats_agent.ingestion import ExtractionError, load as real_load
 from ats_agent.workflow import apply_manifest, build_proposal
 
@@ -116,6 +117,28 @@ class TransactionalApplyTests(unittest.TestCase):
                 apply_manifest(manifest)
 
             self.assertFalse(output.exists())
+
+    def test_document_patcher_rejects_rtf_and_html_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "resume.txt"
+            source.write_text("Supported Python checks.\n", encoding="utf-8")
+            change = {
+                "id": "C1",
+                "operation": "replace_span",
+                "expected_text": "Supported Python checks.",
+                "replacement_text": "Supported Python validation.",
+                "anchor": {},
+            }
+            for suffix in (".rtf", ".html"):
+                with self.subTest(suffix=suffix):
+                    output = root / f"tailored{suffix}"
+                    with self.assertRaisesRegex(
+                        ValueError,
+                        "unsupported output format",
+                    ):
+                        patch_document(source, output, [change])
+                    self.assertFalse(output.exists())
 
     def test_failed_output_verification_leaves_no_output_or_temp_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
