@@ -2,7 +2,7 @@
 
 The primary proposal artifacts live in :mod:`ats_agent.reporting`. This module
 keeps the public ``render_markdown`` / ``render_html`` contract used by earlier
-clients while rendering schema-v4 proposals safely.
+clients while rendering schema-v5 proposals safely.
 """
 from __future__ import annotations
 
@@ -226,6 +226,9 @@ def render_html(
 
     proposal_file_json = json.dumps(proposal_filename).replace("</", "<\\/")
     default_output_json = json.dumps(default_output).replace("</", "<\\/")
+    proposal_digest_json = json.dumps(
+        str(proposal.get("proposal_digest") or "")
+    ).replace("</", "<\\/")
     return f'''<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CV Tailoring Review</title><style>
@@ -240,11 +243,12 @@ pre{{white-space:pre-wrap;background:#f7f9fc;padding:10px;border-radius:8px}}sel
 <button type="button" id="download">Download approval manifest</button>
 <script>
 const proposalFile={proposal_file_json}; const outputDocument={default_output_json};
+const proposalDigest={proposal_digest_json};
 document.getElementById('download').addEventListener('click',()=>{{
  const selections=[...document.querySelectorAll('input[name="change"]:checked:not(:disabled)')].map(box=>{{
   const id=box.value; const select=document.querySelector(`[data-variant-for="${{id}}"]`); return {{change_id:id,variant_id:select.value}};
  }});
- const manifest={{proposal:proposalFile,approved_change_ids:selections.map(x=>x.change_id),selections,output:outputDocument,document_mode:'preserve'}};
+ const manifest={{schema_version:2,proposal:proposalFile,proposal_digest:proposalDigest,approved_change_ids:selections.map(x=>x.change_id),selections,output:outputDocument,document_mode:'preserve'}};
  const blob=new Blob([JSON.stringify(manifest,null,2)],{{type:'application/json'}}); const a=document.createElement('a');
  a.href=URL.createObjectURL(blob); a.download='approval-manifest.json'; a.click(); URL.revokeObjectURL(a.href);
 }});

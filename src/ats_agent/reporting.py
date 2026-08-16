@@ -99,7 +99,7 @@ document.getElementById('download').addEventListener('click',()=>{{
   const id=box.dataset.id; const select=document.querySelector(`.variant[data-id="${{id}}"]`);
   return {{change_id:id,variant_id:select.value}};
  }});
- const manifest={{proposal:'proposal.json',selections,approved_change_ids:selections.map(x=>x.change_id),mode:'preserve',output:'tailored-resume.docx'}};
+ const manifest={{schema_version:2,proposal:'proposal.json',proposal_digest:proposal.proposal_digest,selections,approved_change_ids:selections.map(x=>x.change_id),document_mode:'preserve',output:'tailored-resume.docx'}};
  const blob=new Blob([JSON.stringify(manifest,null,2)],{{type:'application/json'}});
  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='approval-manifest.json';a.click();URL.revokeObjectURL(a.href);
 }});
