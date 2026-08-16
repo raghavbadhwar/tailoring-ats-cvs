@@ -48,6 +48,13 @@ class ReleaseIntegrityTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
         self.assertIn("release tree integrity passed", result.stdout)
 
+    def test_ci_runs_release_tree_checker_before_tests(self) -> None:
+        workflow_text = _workflow_text()
+        checker = "python scripts/check_release_tree.py"
+        tests = "coverage run --source=ats_agent -m unittest discover -s tests -v"
+        self.assertIn(checker, workflow_text)
+        self.assertLess(workflow_text.index(checker), workflow_text.index(tests))
+
 
 if __name__ == "__main__":
     unittest.main()
