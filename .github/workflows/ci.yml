@@ -72,7 +72,36 @@ jobs:
           test -s "$run_dir/review.html"
           grep -q "Requirement-to-Evidence Matrix" "$run_dir/review.md"
           grep -q "Download approval manifest" "$run_dir/review.html"
-          cp examples/approved_changes.json "$run_dir/approved_changes.json"
+          python - "$run_dir/proposal.json" "$run_dir/approved_changes.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          proposal_path = Path(sys.argv[1])
+          manifest_path = Path(sys.argv[2])
+          proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+          change = next(
+              item for item in proposal["changes"] if item.get("supported")
+          )
+          variant_id = (
+              change.get("default_variant") or change["variants"][0]["id"]
+          )
+          manifest = {
+              "schema_version": 2,
+              "proposal": proposal_path.name,
+              "proposal_digest": proposal["proposal_digest"],
+              "selections": [
+                  {"change_id": change["id"], "variant_id": variant_id}
+              ],
+              "approved_change_ids": [change["id"]],
+              "document_mode": "preserve",
+              "output": "tailored-resume.txt",
+          }
+          manifest_path.write_text(
+              json.dumps(manifest, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
           (
             cd "$run_dir"
             ats-agent apply approved_changes.json > apply-result.json
