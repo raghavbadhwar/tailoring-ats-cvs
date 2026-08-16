@@ -129,7 +129,9 @@ def _expand_case_spec(
 ) -> dict[str, Any] | list[dict[str, Any]]:
     case_type = case.get("_type")
     if case_type == "public-v3":
-        return _expand_public_spec(case)
+        standalone = dict(case)
+        standalone.setdefault("context", "general assignment context")
+        return _expand_public_spec(standalone)
     if case_type == "public-v3-matrix":
         return _expand_public_matrix(case)
     if case_type == "adversarial-v3-matrix":
