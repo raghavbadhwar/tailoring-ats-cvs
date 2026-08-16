@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from importlib import resources
 from importlib.util import find_spec
@@ -11,8 +12,12 @@ from pathlib import Path
 from .benchmark import run as run_benchmark
 from .formatting import audit_file
 from .ingestion import load
-from .reporting import write_review_artifacts
-from .reports import render_html, render_markdown
+from .review import (
+    build_approval_manifest,
+    render_html,
+    render_markdown,
+    write_review_bundle,
+)
 from .workflow import apply_manifest, build_proposal
 
 
@@ -21,6 +26,15 @@ def _existing(path: str) -> str:
     if not candidate.is_file():
         raise argparse.ArgumentTypeError(f"file not found: {candidate}")
     return str(candidate)
+
+
+def _selection(value: str) -> tuple[str, str | None]:
+    change_id, separator, variant_id = value.partition(":")
+    if not change_id.strip():
+        raise argparse.ArgumentTypeError(
+            "selection must use CHANGE_ID or CHANGE_ID:VARIANT_ID"
+        )
+    return change_id.strip(), variant_id.strip() if separator and variant_id.strip() else None
 
 
 def _add_analysis_inputs(command: argparse.ArgumentParser) -> None:
@@ -59,6 +73,7 @@ def _proposal_from_args(args: argparse.Namespace) -> dict:
 
 
 def _write_json(path: Path, payload: object) -> None:
+    path = path.expanduser().resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
@@ -68,16 +83,22 @@ def _write_review(
     markdown_path: Path,
     html_path: Path,
     output_document: str,
+    *,
+    redacted: bool,
 ) -> dict:
     proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
     markdown_path.parent.mkdir(parents=True, exist_ok=True)
     html_path.parent.mkdir(parents=True, exist_ok=True)
-    markdown_path.write_text(render_markdown(proposal), encoding="utf-8")
+    markdown_path.write_text(
+        render_markdown(proposal, redacted=redacted),
+        encoding="utf-8",
+    )
     html_path.write_text(
         render_html(
             proposal,
             proposal_filename=proposal_path.name,
             default_output=output_document,
+            redacted=redacted,
         ),
         encoding="utf-8",
     )
@@ -87,6 +108,31 @@ def _write_review(
         "markdown": str(markdown_path),
         "html": str(html_path),
         "output_document": output_document,
+        "review_mode": "redacted" if redacted else "full",
+    }
+
+
+def _write_approval(args: argparse.Namespace) -> dict:
+    proposal_path = Path(args.proposal).expanduser().resolve()
+    manifest_path = Path(args.output).expanduser().resolve()
+    proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+    relative_proposal = os.path.relpath(proposal_path, manifest_path.parent)
+    manifest = build_approval_manifest(
+        proposal,
+        proposal_filename=relative_proposal,
+        selections=args.select,
+        output_document=args.output_document,
+        document_mode=args.document_mode,
+        force=args.force,
+    )
+    _write_json(manifest_path, manifest)
+    return {
+        "status": "written",
+        "approval_manifest": str(manifest_path),
+        "proposal": str(proposal_path),
+        "proposal_digest": manifest["proposal_digest"],
+        "approved_change_ids": manifest["approved_change_ids"],
+        "output_document": args.output_document,
     }
 
 
@@ -111,8 +157,53 @@ def _doctor() -> dict:
             "docx_preserve_output": bool(find_spec("docx")),
             "pdf_input": bool(find_spec("pypdf")),
             "pdf_output": False,
+            "redacted_review": True,
+            "digest_bound_approval": True,
+            "transactional_apply": True,
         },
     }
+
+
+def _error_exit_code(exc: Exception) -> int:
+    message = str(exc).lower()
+    if any(
+        marker in message
+        for marker in (
+            "stale proposal",
+            "stale artifact",
+            "proposal digest",
+            "digest-bound approval",
+            "does not match proposal content",
+        )
+    ):
+        return 3
+    if any(
+        marker in message
+        for marker in (
+            "ownership escalation",
+            "metric binding",
+            "unsupported numeric",
+            "protected status",
+            "candidate identity",
+            "has no evidence",
+            "is unsupported",
+            "unknown approved change",
+        )
+    ):
+        return 4
+    if any(
+        marker in message
+        for marker in (
+            "output",
+            "document anchor",
+            "docx",
+            "pdf output",
+            "unsupported output format",
+            "verification failed",
+        )
+    ):
+        return 5
+    return 2
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -135,6 +226,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     _add_analysis_inputs(prepare)
     prepare.add_argument("--out", required=True, help="run directory")
+    prepare.add_argument(
+        "--redacted",
+        action="store_true",
+        help="write a shareable review with candidate content removed",
+    )
 
     review = sub.add_parser(
         "review",
@@ -147,15 +243,48 @@ def main(argv: list[str] | None = None) -> int:
         "--output-document",
         default="tailored-resume.docx",
     )
+    review.add_argument(
+        "--redacted",
+        action="store_true",
+        help="remove candidate content and disable approvals",
+    )
+
+    approve = sub.add_parser(
+        "approve",
+        help="create a digest-bound approval manifest without editing",
+    )
+    approve.add_argument("proposal", type=_existing)
+    approve.add_argument(
+        "--select",
+        action="append",
+        required=True,
+        type=_selection,
+        help="CHANGE_ID or CHANGE_ID:VARIANT_ID; repeatable",
+    )
+    approve.add_argument("--output", required=True, help="approval manifest path")
+    approve.add_argument(
+        "--output-document",
+        default="tailored-resume.docx",
+    )
+    approve.add_argument(
+        "--document-mode",
+        choices=("preserve", "rebuild"),
+        default="preserve",
+    )
+    approve.add_argument(
+        "--force",
+        action="store_true",
+        help="allow replacement of an existing final output at apply time",
+    )
 
     formatting = sub.add_parser("format", help="audit ATS-friendly formatting")
     formatting.add_argument("resume", type=_existing)
 
-    apply = sub.add_parser(
+    apply_command = sub.add_parser(
         "apply",
         help="apply explicitly approved supported changes",
     )
-    apply.add_argument("approval_manifest", type=_existing)
+    apply_command.add_argument("approval_manifest", type=_existing)
 
     validate = sub.add_parser(
         "validate",
@@ -189,7 +318,10 @@ def main(argv: list[str] | None = None) -> int:
                 Path(args.markdown),
                 Path(args.html),
                 args.output_document,
+                redacted=args.redacted,
             )
+        elif args.command == "approve":
+            payload = _write_approval(args)
         elif args.command in {"audit", "propose"}:
             payload = _proposal_from_args(args)
             if args.command == "audit" and payload.get("status") == "draft":
@@ -199,14 +331,17 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "prepare":
             proposal = _proposal_from_args(args)
             out = Path(args.out).expanduser().resolve()
-            proposal_path = out / "proposal.json"
-            _write_json(proposal_path, proposal)
-            artifacts = write_review_artifacts(proposal, out)
+            artifacts = write_review_bundle(
+                proposal,
+                out,
+                redacted=args.redacted,
+            )
             payload = {
                 "status": proposal.get("status"),
-                "proposal": str(proposal_path),
+                "proposal": artifacts["proposal"],
                 "proposal_markdown": artifacts["markdown"],
                 "review_html": artifacts["html"],
+                "review_mode": "redacted" if args.redacted else "full",
             }
         else:
             payload = apply_manifest(Path(args.approval_manifest))
@@ -215,7 +350,7 @@ def main(argv: list[str] | None = None) -> int:
             json.dumps({"status": "blocked", "error": str(exc)}, indent=2),
             file=sys.stderr,
         )
-        return 2
+        return _error_exit_code(exc)
     print(json.dumps(payload, indent=2))
     return 0
 
