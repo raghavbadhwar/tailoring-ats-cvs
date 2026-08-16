@@ -26,6 +26,8 @@ jobs:
         run: |
           python scripts/validate_skill.py
           python scripts/validate_benchmark_diversity.py
+      - name: Build reproducible agent adapter bundles
+        run: python scripts/build_adapter_bundles.py --output-dir /tmp/ats-agent-adapters
       - name: Check repository whitespace
         run: git diff --check
       - name: Lint
@@ -38,6 +40,7 @@ jobs:
           coverage run --source=ats_agent -m unittest discover -s tests -v
           coverage run --append --source=ats_agent scripts/check_benchmark.py
           run_dir="$(mktemp -d)"
+          coverage run --append --source=ats_agent -m ats_agent.cli --version > /dev/null
           coverage run --append --source=ats_agent -m ats_agent.cli doctor > /dev/null
           coverage run --append --source=ats_agent -m ats_agent.cli format examples/sample_resume.txt > /dev/null
           coverage run --append --source=ats_agent -m ats_agent.cli propose \
@@ -147,4 +150,5 @@ jobs:
       - name: Smoke installed CLI
         run: |
           ats-agent --help
+          ats-agent --version
           ats-agent benchmark --suite smoke

@@ -39,6 +39,22 @@ Development environment:
 python -m pip install -e '.[dev,documents]'
 ```
 
+## Agent-native adapters
+
+The CLI is the only CV engine. Codex and Claude Code adapters are thin instructions that call it and preserve the same approval boundary.
+
+- **Codex:** the repository skill is [`.agents/skills/tailor-cv/`](.agents/skills/tailor-cv/). It first checks `ats-agent`, prints an immutable install command when missing, and waits for explicit permission before installation.
+- **Claude Code:** load [`adapters/claude-code/`](adapters/claude-code/) as a local plugin with `claude --plugin-dir adapters/claude-code`. Its skill is available as `/tailoring-ats-cvs:tailor-cv`.
+- **Restricted environments:** use the manual virtual-environment command printed by `.agents/skills/tailor-cv/scripts/check-install.py --json`; no adapter installs software silently.
+
+Build deterministic release bundles with:
+
+```bash
+python scripts/build_adapter_bundles.py --output-dir dist
+```
+
+The bootstrap reference is pinned to immutable commit `f666ab5a6a3b074fad6f470f986436814b56a3d3`, not a moving branch. After installation, verify `ats-agent doctor`, `ats-agent --help`, and `ats-agent benchmark --suite smoke`.
+
 ## End-to-end workflow
 
 ### 1. Prepare a proposal and review bundle

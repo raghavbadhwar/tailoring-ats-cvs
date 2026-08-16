@@ -29,7 +29,7 @@ After PR checks pass on the exact head:
 4. The tag-triggered `Release` workflow reruns release gates, the private holdout, security checks, package build, clean-wheel install, SBOM generation, and checksums.
 5. Only after those steps pass does the workflow create the GitHub prerelease.
 
-Release assets include the wheel, source distribution, CycloneDX SBOM, SHA-256 checksums, release-check metadata, and public Benchmark v3 reports.
+Release assets include the wheel, source distribution, Codex skill ZIP, Claude Code plugin ZIP, CycloneDX SBOM, SHA-256 checksums, release-check metadata, and public Benchmark v3 reports.
 
 ## Stable v1.0
 

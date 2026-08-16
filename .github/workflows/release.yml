@@ -58,7 +58,9 @@ jobs:
           pip-audit --local
           bandit -r src/ats_agent -q -ll
       - name: Build wheel and source distribution
-        run: python -m build
+        run: |
+          python -m build
+          python scripts/build_adapter_bundles.py --output-dir dist
       - name: Clean-install wheel outside repository
         run: |
           python -m venv /tmp/ats-release

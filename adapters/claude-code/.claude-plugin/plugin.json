@@ -1,0 +1,11 @@
+{
+  "name": "tailoring-ats-cvs",
+  "description": "Approval-first, evidence-grounded CV tailoring through the local ats-agent CLI.",
+  "version": "1.0.0b1",
+  "author": {
+    "name": "Raghav Badhwar"
+  },
+  "repository": "https://github.com/raghavbadhwar/tailoring-ats-cvs",
+  "license": "MIT",
+  "keywords": ["cv", "resume", "career", "approval-first"]
+}

@@ -20,6 +20,19 @@ def main() -> None:
     ):
         assert phrase in skill, phrase
 
+    codex_skill = (ROOT / ".agents/skills/tailor-cv/SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    assert codex_skill.startswith("---\nname: tailor-cv\n")
+    assert "PROPOSE → EXPLICIT APPROVAL → APPLY → VALIDATE" in codex_skill
+    assert "Never run `ats-agent apply`" in codex_skill
+    claude_manifest = json.loads(
+        (ROOT / "adapters/claude-code/.claude-plugin/plugin.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert claude_manifest["name"] == "tailoring-ats-cvs"
+
     expected = {
         "public": 180,
         "adversarial": 60,

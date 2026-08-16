@@ -8,6 +8,7 @@ import sys
 from importlib.util import find_spec
 from pathlib import Path
 
+from . import __version__
 from .benchmark import (
     BenchmarkGateError,
     SUITE_FILENAMES,
@@ -231,6 +232,7 @@ def _error_exit_code(exc: Exception) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="ats-agent")
+    parser.add_argument("--version", action="version", version=__version__)
     sub = parser.add_subparsers(dest="command", required=True)
 
     audit = sub.add_parser(
