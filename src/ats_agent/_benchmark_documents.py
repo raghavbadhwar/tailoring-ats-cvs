@@ -111,7 +111,7 @@ def _materialize_document_fixture(
             document.add_paragraph("Supported repeated validation text.")
         if "footer" in mode:
             document.sections[0].footer.paragraphs[0].text = "Fixture footer"
-        document.save(target)
+        document.save(str(target))
         return
     if target.suffix.casefold() == ".pdf":
         target.write_bytes(_pdf_bytes(text))
