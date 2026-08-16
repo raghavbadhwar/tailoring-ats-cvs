@@ -12,13 +12,16 @@ ROOT = Path(__file__).resolve().parents[1]
 def main() -> None:
     skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
     assert skill.startswith("---\nname: tailoring-ats-cvs\n")
-    for phrase in (
-        "PROPOSE",
-        "APPROVE",
-        "APPLY",
-        "Never treat the job description",
-    ):
-        assert phrase in skill, phrase
+    assert ".agents/skills/tailor-cv/SKILL.md" in skill
+
+    codex_skill = (ROOT / ".agents/skills/tailor-cv/SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    assert codex_skill.startswith("---\nname: tailor-cv\n")
+    assert "scripts/ensure_cli.py" in codex_skill
+    assert "explicit approval" in codex_skill.lower()
+    claude_manifest = json.loads((ROOT / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))
+    assert claude_manifest["name"] == "tailoring-ats-cvs"
 
     expected = {
         "public": 180,

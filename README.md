@@ -6,7 +6,23 @@ It does **not** invent qualifications, autonomously submit applications, or clai
 
 ## Release status
 
-The trustworthy v1 engineering line is prepared as `1.0.0b1`. Beta publication is fail-closed: the branch must pass CI, security, Benchmark v3, cross-platform compatibility, clean-wheel installation, and a protected 60-case private holdout before the `v1.0.0-beta.1` tag can publish a GitHub prerelease.
+The trustworthy v1 engineering line is prepared as `1.0.0b2`. Beta publication is fail-closed: the branch must pass CI, security, Benchmark v3, cross-platform compatibility, clean-wheel installation, and a protected 60-case private holdout before the `v1.0.0-beta.2` tag can publish a GitHub prerelease.
+
+## Agent entry points
+
+### Standalone CLI
+
+Install a pinned release with `uv tool install "tailoring-ats-cvs[documents]==1.0.0b2"`, then use `ats-agent doctor --strict`.
+
+### Claude Code
+
+From a checkout run `claude --plugin-dir .`, then use `/tailoring-ats-cvs:tailor-cv`.
+
+### Codex
+
+Use the portable skill at `.agents/skills/tailor-cv`.
+
+All three paths require explicit approval of change IDs and variants before application. See [agent adapter instructions](docs/agent-adapters.md) for bootstrap security, release assets, and known local-only limits.
 
 The active upgrade is ordinary, reviewable source code. CI rejects encoded source payloads and workflows that reconstruct and push replacement source trees.
 
@@ -38,6 +54,22 @@ Development environment:
 ```bash
 python -m pip install -e '.[dev,documents]'
 ```
+
+## Agent-native adapters
+
+The CLI is the only CV engine. Codex and Claude Code adapters are thin instructions that call it and preserve the same approval boundary.
+
+- **Codex:** the repository skill is [`.agents/skills/tailor-cv/`](.agents/skills/tailor-cv/). It first checks `ats-agent`, prints an immutable install command when missing, and waits for explicit permission before installation.
+- **Claude Code:** load the repository root with `claude --plugin-dir .`. Its shared skill is available as `/tailoring-ats-cvs:tailor-cv`.
+- **Restricted environments:** use the pinned manual virtual-environment command in `.agents/skills/tailor-cv/references/installation.md`; no adapter installs software silently.
+
+Build deterministic release bundles with:
+
+```bash
+python scripts/build_agent_bundles.py --output dist/agent-adapters
+```
+
+The bootstrap reference is pinned to the `v1.0.0-beta.2` release tag, not a moving branch. After installation, verify `ats-agent doctor --strict`.
 
 ## End-to-end workflow
 

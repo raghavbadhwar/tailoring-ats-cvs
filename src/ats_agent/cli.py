@@ -5,9 +5,11 @@ import argparse
 import json
 import os
 import sys
+import tempfile
 from importlib.util import find_spec
 from pathlib import Path
 
+from . import __version__
 from .benchmark import (
     BenchmarkGateError,
     SUITE_FILENAMES,
@@ -164,8 +166,43 @@ def _run_benchmark(
     return run_suite(suite, report_path=report_path)
 
 
-def _doctor() -> dict:
-    return {
+def _strict_doctor_check() -> dict[str, object]:
+    with tempfile.TemporaryDirectory(prefix="ats-agent-doctor-") as directory:
+        root = Path(directory)
+        resume = root / "resume.txt"
+        job = root / "job.md"
+        proposal_path = root / "proposal.json"
+        approval_path = root / "approval.json"
+        output_path = root / "tailored.txt"
+        resume.write_text("PROJECTS\n- Helped build automated workflows with 42 tests.\n", encoding="utf-8")
+        job.write_text("Workflow automation is required.\n", encoding="utf-8")
+        proposal = build_proposal(resume, job, candidate_id="doctor-candidate")
+        supported = next(change for change in proposal["changes"] if change.get("supported"))
+        _write_json(proposal_path, proposal)
+        manifest = build_approval_manifest(
+            proposal,
+            proposal_filename=proposal_path.name,
+            selections=[(supported["id"], supported.get("default_variant") or supported["variants"][0]["id"])],
+            output_document=output_path.name,
+            document_mode="preserve",
+        )
+        _write_json(approval_path, manifest)
+        receipt = apply_manifest(approval_path)
+        loaded = load(output_path)
+        return {
+            "status": "passed",
+            "proposal_created": proposal_path.is_file(),
+            "approval_created": approval_path.is_file(),
+            "output_validated": bool(loaded.get("body_text")),
+            "receipt_status": receipt.get("status"),
+        }
+
+
+def _doctor(*, strict: bool = False) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "schema_version": 1,
+        "status": "ready",
+        "package": {"name": "tailoring-ats-cvs", "version": __version__, "executable": "ats-agent"},
         "python": sys.version.split()[0],
         "optional_dependencies": {
             "pypdf": bool(find_spec("pypdf")),
@@ -181,8 +218,12 @@ def _doctor() -> dict:
             "digest_bound_approval": True,
             "transactional_apply": True,
             "benchmark_v3": True,
+            "agent_adapter_contract": 1,
         },
     }
+    if strict:
+        payload["strict_check"] = _strict_doctor_check()
+    return payload
 
 
 def _error_exit_code(exc: Exception) -> int:
@@ -231,6 +272,7 @@ def _error_exit_code(exc: Exception) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="ats-agent")
+    parser.add_argument("--version", action="version", version=__version__)
     sub = parser.add_subparsers(dest="command", required=True)
 
     audit = sub.add_parser(
@@ -344,15 +386,16 @@ def main(argv: list[str] | None = None) -> int:
         help="write the complete machine-readable report to this path",
     )
 
-    sub.add_parser(
+    doctor = sub.add_parser(
         "doctor",
-        help="show local capabilities and optional dependencies",
+        help="show local capabilities and optionally run a functional self-test",
     )
+    doctor.add_argument("--strict", action="store_true", help="run a temporary propose-approve-apply-validate smoke check")
     args = parser.parse_args(argv)
 
     try:
         if args.command == "doctor":
-            payload = _doctor()
+            payload = _doctor(strict=args.strict)
         elif args.command == "benchmark":
             payload = _run_benchmark(
                 args.dataset,

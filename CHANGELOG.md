@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.0b2
+
+- Added portable Agent Skill for Codex and Claude Code plugin launchers.
+- Added explicit permission-gated CLI bootstrap and reproducible adapter bundles.
+- Added adapter CI and approval-boundary end-to-end tests.
+
 ## 1.0.0-beta.1 — pending protected release gate
 
 - Replaced hidden/encoded release payloads with one ordinary, reviewable source tree.
@@ -14,6 +20,7 @@
 - Added Python 3.10–3.13 Linux/Windows compatibility checks and a 90% branch-coverage release gate.
 - Added dependency auditing, Bandit, CodeQL, dependency review, credential-shaped secret scanning, CycloneDX SBOM generation, and a protected tag-based release workflow.
 - Added a fail-closed private-holdout release hook; the private cases themselves are never committed or uploaded as release artifacts.
+- Added portable Codex and Claude Code adapters, approval-gated pinned bootstrap guidance, and deterministic skill/plugin ZIP release bundles.
 
 ## 0.9.0
 

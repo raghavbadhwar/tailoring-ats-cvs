@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   release:
@@ -23,12 +24,12 @@ jobs:
       - name: Verify tag matches package beta
         shell: bash
         run: |
-          test "${GITHUB_REF_NAME}" = "v1.0.0-beta.1"
+          test "${GITHUB_REF_NAME}" = "v1.0.0-beta.2"
           python - <<'PY'
           import tomllib
           from pathlib import Path
           version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
-          assert version == "1.0.0b1", version
+          assert version == "1.0.0b2", version
           PY
       - name: Install release toolchain
         run: |
@@ -58,7 +59,11 @@ jobs:
           pip-audit --local
           bandit -r src/ats_agent -q -ll
       - name: Build wheel and source distribution
-        run: python -m build
+        run: |
+          python -m build
+          # tailor-cv-agent-skill-v1.0.0-beta.2.zip and tailoring-ats-cvs-claude-plugin-v1.0.0-beta.2.zip
+          python scripts/build_agent_bundles.py --output dist/agent-adapters
+          python scripts/verify_agent_bundle.py dist/agent-adapters
       - name: Clean-install wheel outside repository
         run: |
           python -m venv /tmp/ats-release
@@ -71,13 +76,14 @@ jobs:
         shell: bash
         run: |
           cyclonedx-py environment --output-format JSON --output-file sbom.cdx.json
-          sha256sum dist/* sbom.cdx.json release-check.json benchmarks/v3/reports/*.json > SHA256SUMS
+          sha256sum dist/* dist/agent-adapters/* sbom.cdx.json release-check.json benchmarks/v3/reports/*.json > SHA256SUMS
       - name: Upload immutable release evidence
         uses: actions/upload-artifact@v6
         with:
           name: v1-beta-release-evidence
           path: |
             dist/*
+            dist/agent-adapters/*
             sbom.cdx.json
             SHA256SUMS
             release-check.json
@@ -89,9 +95,26 @@ jobs:
         shell: bash
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            dist/* sbom.cdx.json SHA256SUMS release-check.json benchmarks/v3/reports/*.json \
+            dist/* dist/agent-adapters/* sbom.cdx.json SHA256SUMS release-check.json benchmarks/v3/reports/*.json \
             --repo "$GITHUB_REPOSITORY" \
-            --title "Trustworthy CV Tailoring v1.0.0-beta.1" \
+            --title "Trustworthy CV Tailoring v1.0.0-beta.2" \
             --notes "Approval-first beta. Includes reproducible package artifacts, SBOM, checksums, public benchmark reports, and protected holdout verification metadata. No universal ATS or employer-acceptance claims are made." \
             --prerelease \
             --verify-tag
+  publish-pypi:
+    needs: release
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: python -m pip install build
+      - run: python -m build --outdir dist/python
+      - name: Publish Python distribution to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/python/

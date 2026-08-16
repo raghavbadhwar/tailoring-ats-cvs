@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tailoring-ats-cvs"
-version = "1.0.0b1"
+version = "1.0.0b2"
 description = "Approval-first, evidence-grounded career intelligence and CV tailoring"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -17,6 +17,7 @@ classifiers = [
 ]
 dependencies = [
   "defusedxml>=0.7,<1",
+  "packaging>=24",
   "pydantic>=2.8,<3",
   "python-docx>=1.1",
 ]
@@ -32,6 +33,12 @@ dev = [
   "pip-audit>=2.7",
   "ruff>=0.6",
 ]
+
+[project.urls]
+Homepage = "https://github.com/raghavbadhwar/tailoring-ats-cvs"
+Repository = "https://github.com/raghavbadhwar/tailoring-ats-cvs"
+Issues = "https://github.com/raghavbadhwar/tailoring-ats-cvs/issues"
+Documentation = "https://github.com/raghavbadhwar/tailoring-ats-cvs#readme"
 
 [project.scripts]
 ats-agent = "ats_agent.cli:main"

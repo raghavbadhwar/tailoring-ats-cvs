@@ -1,6 +1,10 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
+.coverage
 .venv/
 dist/
 build/
+benchmarks/v3/reports/
+dist/agent-adapters/
+.career-cv/
