@@ -258,11 +258,14 @@ def _evaluate_adversarial_case(case: dict[str, Any]) -> dict[str, Any]:
                 str(item["kind"]): str(item["status"])
                 for item in evaluate_hard_gates(requirements, ledger)
             }
-            expected = {
+            expected_gates = {
                 str(item["kind"]): str(item["status"])
                 for item in case.get("expected_hard_gates") or []
             }
-            passed = all(gates.get(kind) == status for kind, status in expected.items())
+            passed = all(
+                gates.get(kind) == status
+                for kind, status in expected_gates.items()
+            )
         elif scenario == "mixed_importance":
             requirements = extract_requirements(
                 str(case.get("job_description") or "")
@@ -272,11 +275,11 @@ def _evaluate_adversarial_case(case: dict[str, Any]) -> dict[str, Any]:
                 for requirement in requirements
                 if requirement.get("kind") == "skill"
             }
-            expected = {
+            expected_requirements = {
                 _expected_requirement_key(requirement)
                 for requirement in case.get("expected_requirements") or []
             }
-            passed = expected <= actual
+            passed = expected_requirements <= actual
         elif scenario in {"stale_resume", "proposal_tampering"}:
             with tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
