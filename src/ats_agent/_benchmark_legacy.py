@@ -53,22 +53,20 @@ def _legacy_case(case: dict[str, Any]) -> dict[str, Any]:
         for term in mapping.get("normalized_terms", [])
     }
     unsupported_v1 = case.get("expected_unsupported_claims")
+    supported_values = case.get("expected_supported_terms")
+    if supported_values is None:
+        supported_values = [] if unsupported_v1 else (case.get("evidence") or [])
+    unsupported_values = case.get("expected_unsupported_terms")
+    if unsupported_values is None:
+        unsupported_values = unsupported_v1 or []
     expected_supported = {
         str(value).strip().casefold()
-        for value in (
-            case.get("expected_supported_terms")
-            if case.get("expected_supported_terms") is not None
-            else ([] if unsupported_v1 else case.get("evidence") or [])
-        )
+        for value in supported_values
         if str(value).strip()
     }
     expected_unsupported = {
         str(value).strip().casefold()
-        for value in (
-            case.get("expected_unsupported_terms")
-            if case.get("expected_unsupported_terms") is not None
-            else unsupported_v1 or []
-        )
+        for value in unsupported_values
         if str(value).strip()
     }
     expected_gates = {
