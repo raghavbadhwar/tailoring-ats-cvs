@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "package_name": "tailoring-ats-cvs",
-  "minimum_version": "1.0.0b2",
-  "preferred_spec": "tailoring-ats-cvs[documents]==1.0.0b2",
-  "git_fallback_spec": "git+https://github.com/raghavbadhwar/tailoring-ats-cvs.git@v1.0.0-beta.2",
+  "minimum_version": "1.0.0b3",
+  "preferred_spec": "tailoring-ats-cvs[documents]==1.0.0b3",
+  "git_fallback_spec": "git+https://github.com/raghavbadhwar/tailoring-ats-cvs.git@v1.0.0-beta.3",
   "executable": "ats-agent",
   "doctor_arguments": ["doctor", "--strict"],
   "supported_installers": ["uv", "pipx"],

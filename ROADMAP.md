@@ -1,8 +1,8 @@
 # Roadmap
 
-## v1.0.0-beta.2 — agent-native beta
+## v1.0.0-beta.3 — agent-native job-research beta
 
-- Validate the CLI-first Codex and Claude Code adapters before considering MCP or a web UI.
+- Add safe public job-list capture, transparent keyword coverage, and evidence-building gap recommendations.
 
 ## v1.0.0-beta.1 — trustworthy engineering beta
 

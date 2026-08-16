@@ -18,6 +18,7 @@ from .benchmark import (
 )
 from .formatting import audit_file
 from .ingestion import load
+from .job_research import research_jobs
 from .review import (
     build_approval_manifest,
     render_html,
@@ -300,6 +301,15 @@ def main(argv: list[str] | None = None) -> int:
         help="write a shareable review with candidate content removed",
     )
 
+    research = sub.add_parser(
+        "research-jobs",
+        help="capture public job pages and prepare one proposal per job",
+    )
+    research.add_argument("resume", type=_existing)
+    research.add_argument("job_list", type=_existing)
+    research.add_argument("--out", required=True, help="new run directory")
+    research.add_argument("--candidate-id", default="candidate")
+
     review = sub.add_parser(
         "review",
         help="render Markdown and local HTML from an existing proposal",
@@ -442,6 +452,13 @@ def main(argv: list[str] | None = None) -> int:
                 "review_html": artifacts["html"],
                 "review_mode": "redacted" if args.redacted else "full",
             }
+        elif args.command == "research-jobs":
+            payload = research_jobs(
+                Path(args.resume),
+                Path(args.job_list),
+                Path(args.out),
+                candidate_id=args.candidate_id,
+            )
         else:
             payload = apply_manifest(Path(args.approval_manifest))
     except (ValueError, OSError, json.JSONDecodeError) as exc:

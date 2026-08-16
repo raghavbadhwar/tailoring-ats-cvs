@@ -38,14 +38,14 @@ def _archive(destination: Path, root: Path, files: list[Path], prefix: str) -> N
 
 def build_bundles(root: Path, output: Path) -> list[Path]:
     version = _version(root)
-    if version != "1.0.0b2":
-        raise ValueError("agent adapter release expects 1.0.0b2")
+    if version != "1.0.0b3":
+        raise ValueError("agent adapter release expects 1.0.0b3")
     manifest = json.loads((root / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))
-    if manifest.get("version") != "1.0.0-beta.2":
+    if manifest.get("version") != "1.0.0-beta.3":
         raise ValueError("plugin version does not match package version")
     output.mkdir(parents=True, exist_ok=True)
-    skill = output / "tailor-cv-agent-skill-v1.0.0-beta.2.zip"
-    plugin = output / "tailoring-ats-cvs-claude-plugin-v1.0.0-beta.2.zip"
+    skill = output / "tailor-cv-agent-skill-v1.0.0-beta.3.zip"
+    plugin = output / "tailoring-ats-cvs-claude-plugin-v1.0.0-beta.3.zip"
     _archive(skill, root / ".agents/skills", list((root / ".agents/skills/tailor-cv").rglob("*")), "")
     files = [path for path in (root / ".agents").rglob("*") if path.is_file()]
     files += [root / ".claude-plugin/plugin.json", root / "bin/ats-cv", root / "bin/ats-cv.cmd"]

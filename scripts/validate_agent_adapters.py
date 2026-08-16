@@ -28,12 +28,12 @@ def validate_repository(root: Path) -> dict[str, object]:
         errors.append("missing explicit installation approval")
     if any("shell=True" in script.read_text(encoding="utf-8") for script in scripts):
         errors.append("shell=True in adapter script")
-    if manifest.get("version") != "1.0.0-beta.2" or manifest.get("skills") != ["./.agents/skills/tailor-cv"]:
+    if manifest.get("version") != "1.0.0-beta.3" or manifest.get("skills") != ["./.agents/skills/tailor-cv"]:
         errors.append("plugin manifest mismatch")
     if os.name != "nt" and not (root / "bin/ats-cv").stat().st_mode & 0o111:
         errors.append("POSIX launcher is not executable")
     policy = json.loads(required[-1].read_text(encoding="utf-8"))
-    if policy.get("requires_explicit_approval") is not True or "==1.0.0b2" not in str(policy.get("preferred_spec")):
+    if policy.get("requires_explicit_approval") is not True or "==1.0.0b3" not in str(policy.get("preferred_spec")):
         errors.append("unsafe bootstrap policy")
     return {"errors": errors, "skill_name": "tailor-cv", "plugin_name": "tailoring-ats-cvs", "explicit_install_approval": "--install" in skill and "permission" in skill, "explicit_change_approval": "explicit approval" in skill.lower()}
 

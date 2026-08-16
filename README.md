@@ -2,17 +2,29 @@
 
 An approval-first tool that reads a candidate CV, a job description, and optional supporting evidence; maps requirements to traceable candidate facts; proposes safe role-aligned rewrites; and applies only explicitly approved changes to a new output document.
 
+## Public job-list research
+
+Use a JSON list of public HTTPS job URLs to produce one draft proposal per role. Scrapling captures the listed job page and optional official company-context pages without credentials, redirects, proxies, or browser automation. The batch output includes a keyword-coverage map showing which job terms are directly supported, transferable, or unsupported by the candidate evidence. Unsupported keywords are reported as gaps and are never inserted into the CV.
+
+```json
+{"jobs": [{"id": "analyst", "job_url": "https://careers.example.com/analyst", "context_urls": ["https://example.com/careers"]}]}
+```
+
+```bash
+ats-agent research-jobs resume.pdf jobs.json --candidate-id student --out runs/analyst-batch
+```
+
 It does **not** invent qualifications, autonomously submit applications, or claim a universal ATS score, interview probability, or employer-acceptance probability.
 
 ## Release status
 
-The trustworthy v1 engineering line is prepared as `1.0.0b2`. Beta publication is fail-closed: the branch must pass CI, security, Benchmark v3, cross-platform compatibility, clean-wheel installation, and a protected 60-case private holdout before the `v1.0.0-beta.2` tag can publish a GitHub prerelease.
+The trustworthy v1 engineering line is prepared as `1.0.0b3`. Beta publication is fail-closed: the branch must pass CI, security, Benchmark v3, cross-platform compatibility, clean-wheel installation, and a protected 60-case private holdout before the `v1.0.0-beta.3` tag can publish a GitHub prerelease.
 
 ## Agent entry points
 
 ### Standalone CLI
 
-Install a pinned release with `uv tool install "tailoring-ats-cvs[documents]==1.0.0b2"`, then use `ats-agent doctor --strict`.
+Install a pinned release with `uv tool install "tailoring-ats-cvs[documents]==1.0.0b3"`, then use `ats-agent doctor --strict`.
 
 ### Claude Code
 
@@ -69,7 +81,7 @@ Build deterministic release bundles with:
 python scripts/build_agent_bundles.py --output dist/agent-adapters
 ```
 
-The bootstrap reference is pinned to the `v1.0.0-beta.2` release tag, not a moving branch. After installation, verify `ats-agent doctor --strict`.
+The bootstrap reference is pinned to the `v1.0.0-beta.3` release tag, not a moving branch. After installation, verify `ats-agent doctor --strict`.
 
 ## End-to-end workflow
 

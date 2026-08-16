@@ -16,3 +16,4 @@ Report vulnerabilities privately to the repository owner. Do not include real CV
 - Stale, ambiguous, conflicting, unsupported, and no-op edits are rejected.
 - PDF output is blocked without a genuine renderer.
 - External model calls are not part of the default runtime.
+- `research-jobs` captures only user-listed public HTTPS pages with ordinary Scrapling GET requests; no credentials, redirects, proxies, stealth mode, or browser automation are used.

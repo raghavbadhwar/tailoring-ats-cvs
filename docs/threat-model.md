@@ -16,9 +16,10 @@ This document covers the local evidence-grounded CV workflow: document ingestion
 
 1. **Candidate files:** treated as untrusted input and parsed locally.
 2. **Job description/company context:** vocabulary and requirements only; never candidate evidence.
-3. **Optional model provider:** untrusted drafting assistant; output must pass deterministic validators.
-4. **Approval manifest:** user-controlled allow-list, but still validated against the proposal and evidence ledger.
-5. **Document writer:** may change only anchored, approved spans and must never overwrite the source.
+3. **Optional public job research:** user-listed public HTTPS pages are untrusted context. Capture uses ordinary direct requests without credentials, redirects, proxies, stealth mode, or browser automation.
+4. **Optional model provider:** untrusted drafting assistant; output must pass deterministic validators.
+5. **Approval manifest:** user-controlled allow-list, but still validated against the proposal and evidence ledger.
+6. **Document writer:** may change only anchored, approved spans and must never overwrite the source.
 
 ## Principal threats and controls
 
