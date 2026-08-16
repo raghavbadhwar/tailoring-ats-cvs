@@ -3,7 +3,11 @@ from __future__ import annotations
 import unittest
 
 from ats_agent.evidence import EvidenceSource, build_evidence_ledger
-from ats_agent.requirements import evaluate_hard_gates, extract_requirements
+from ats_agent.requirements import (
+    evaluate_hard_gates,
+    extract_requirements,
+    map_requirements,
+)
 
 
 class RequirementEngineTests(unittest.TestCase):
@@ -29,6 +33,13 @@ class RequirementEngineTests(unittest.TestCase):
 
     def gate_for(self, gates: list[dict], kind: str) -> dict:
         return next(gate for gate in gates if gate["kind"] == kind)
+
+    def mapping_for(self, mappings: list[dict], term: str) -> dict:
+        return next(
+            mapping
+            for mapping in mappings
+            if term in mapping.get("normalized_terms", [])
+        )
 
     def test_semicolon_clauses_keep_local_importance(self) -> None:
         requirements = extract_requirements(
@@ -141,6 +152,60 @@ class RequirementEngineTests(unittest.TestCase):
         self.assertEqual(
             self.gate_for(gates, "minimum_grade")["status"],
             "unmet",
+        )
+
+    def test_react_verb_is_not_treated_as_react_framework_evidence(self) -> None:
+        requirements = extract_requirements("React is required.")
+        mappings = map_requirements(
+            requirements,
+            self.ledger(
+                "EXPERIENCE\n- React quickly to operational incidents.\n"
+            ),
+        )
+        self.assertEqual(
+            self.mapping_for(mappings, "react")["coverage"],
+            "unsupported",
+        )
+
+        valid = map_requirements(
+            requirements,
+            self.ledger("SKILLS\nReact.js\n"),
+        )
+        self.assertIn(
+            self.mapping_for(valid, "react")["coverage"],
+            {"direct", "transferable"},
+        )
+
+    def test_red_amber_green_rag_is_not_retrieval_evidence(self) -> None:
+        requirements = extract_requirements(
+            "Retrieval-augmented generation is required."
+        )
+        mappings = map_requirements(
+            requirements,
+            self.ledger(
+                "EXPERIENCE\n- Prepared a red-amber-green RAG status.\n"
+            ),
+        )
+        self.assertEqual(
+            self.mapping_for(
+                mappings,
+                "retrieval-augmented generation",
+            )["coverage"],
+            "unsupported",
+        )
+
+        valid = map_requirements(
+            requirements,
+            self.ledger(
+                "PROJECTS\n- Built a RAG pipeline with vector embeddings.\n"
+            ),
+        )
+        self.assertIn(
+            self.mapping_for(
+                valid,
+                "retrieval-augmented generation",
+            )["coverage"],
+            {"direct", "transferable"},
         )
 
 
