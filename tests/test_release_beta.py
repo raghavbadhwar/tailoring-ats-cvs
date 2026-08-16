@@ -1,4 +1,4 @@
-import tomllib
+import re
 import unittest
 from pathlib import Path
 
@@ -9,8 +9,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class BetaReleaseContractTests(unittest.TestCase):
     def test_package_and_project_versions_match_beta(self):
-        project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-        self.assertEqual(project["project"]["version"], "1.0.0b1")
+        pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        match = re.search(r'^version\s*=\s*"([^"]+)"', pyproject, flags=re.MULTILINE)
+        self.assertIsNotNone(match)
+        self.assertEqual(match.group(1), "1.0.0b1")
         self.assertEqual(ats_agent.__version__, "1.0.0b1")
 
     def test_release_workflow_requires_protected_holdout_before_publish(self):
