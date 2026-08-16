@@ -309,10 +309,17 @@ def apply_manifest(
         raise ValueError(
             proposal_data.get("reason", "proposal is blocked")
         )
-    if int(proposal_data.get("schema_version", 0)) > SCHEMA_VERSION:
+    proposal_schema = int(proposal_data.get("schema_version", 0))
+    if proposal_schema > SCHEMA_VERSION:
         raise ValueError("proposal schema version is newer than this runtime")
 
     verified_digest = verify_proposal_digest(proposal_data)
+    if proposal_schema >= 5 and (
+        approval.schema_version < 2 or approval.proposal_digest is None
+    ):
+        raise ValueError(
+            "schema-v5 proposal requires a digest-bound approval"
+        )
     if (
         approval.proposal_digest is not None
         and approval.proposal_digest != verified_digest
