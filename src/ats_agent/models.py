@@ -62,6 +62,8 @@ class ApprovalManifest(BaseModel):
 
     Schema version 1 is read-only compatibility for existing local manifests.
     New review surfaces emit schema version 2, which requires a proposal digest.
+    ``selections`` remains ``None`` when omitted so legacy explicit approval
+    arguments are not shadowed by an empty default created during model dump.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -69,7 +71,7 @@ class ApprovalManifest(BaseModel):
     schema_version: int = Field(default=1, ge=1, le=2)
     proposal: str = Field(min_length=1)
     proposal_digest: str | None = None
-    selections: tuple[ApprovalSelection, ...] = ()
+    selections: tuple[ApprovalSelection, ...] | None = None
     approved_change_ids: tuple[str, ...] = ()
     document_mode: DocumentMode = "preserve"
     mode: DocumentMode | None = None
