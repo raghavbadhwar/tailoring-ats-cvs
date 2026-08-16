@@ -163,7 +163,7 @@ def _legacy_result(cases: Sequence[dict[str, Any]]) -> dict[str, Any]:
         "parser_risk_delta": None,
         "human_rewrite_preference": None,
         "measurement_status": {
-            "parser_risk_delta": "not_measured",
-            "human_rewrite_preference": "not_measured",
+            "parser_risk_delta": "not_implemented",
+            "human_rewrite_preference": "requires human-labelled evaluation",
         },
     }
