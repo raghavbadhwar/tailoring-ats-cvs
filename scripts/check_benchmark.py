@@ -66,6 +66,21 @@ def _print_variant_mismatches(report: dict[str, Any]) -> None:
         print(json.dumps(mismatches[:30], indent=2, sort_keys=True))
 
 
+def _print_adversarial_failures(report: dict[str, Any]) -> None:
+    failures = [
+        {
+            "id": case.get("id"),
+            "scenario": case.get("scenario"),
+            "detail": case.get("detail") or "predicate returned false",
+        }
+        for case in report.get("cases", [])
+        if not case.get("passed")
+    ]
+    if failures:
+        print("Benchmark v3 adversarial failures:")
+        print(json.dumps(failures, indent=2, sort_keys=True))
+
+
 def main() -> None:
     public = run_suite(
         "public",
@@ -85,6 +100,7 @@ def main() -> None:
 
     _print_requirement_mismatches(public)
     _print_variant_mismatches(public)
+    _print_adversarial_failures(adversarial)
     _at_least(public, "requirement_extraction_precision", 0.94)
     _at_least(public, "requirement_extraction_recall", 0.94)
     _at_least(public, "evidence_matching_precision", 0.95)
