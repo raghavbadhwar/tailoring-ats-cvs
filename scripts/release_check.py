@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 from ats_agent import __version__
-from ats_agent.benchmark import run_suite
+from ats_agent.benchmark import run
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_VERSION = "1.0.0b1"
@@ -34,7 +34,7 @@ def main() -> None:
     parser.add_argument(
         "--private-holdout",
         type=Path,
-        help="read-only private 60-case holdout JSONL used only in protected release CI",
+        help="read-only private 60-case public-schema holdout JSONL used only in protected release CI",
     )
     args = parser.parse_args()
 
@@ -53,7 +53,9 @@ def main() -> None:
         path = args.private_holdout.expanduser().resolve()
         if not path.is_file():
             raise SystemExit(f"private holdout is missing: {path}")
-        report = run_suite("private", root=ROOT, dataset=path)
+        report = run(path)
+        if report.get("schema_version") != 3 or "metrics" not in report:
+            raise SystemExit("private holdout must use the Benchmark v3 public-case schema")
         if report["case_count"] < 60:
             raise SystemExit(
                 f"private holdout has {report['case_count']} cases; expected at least 60"
