@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import difflib
 import json
+import os
+import uuid
 from pathlib import Path
 from typing import Iterable
 
@@ -36,6 +38,7 @@ from .validation import validate_change
 SCHEMA_VERSION = 5
 POLICY_VERSION = "evidence-policy-v1"
 ONTOLOGY_VERSION = "requirements-v1"
+ALLOWED_OUTPUT_SUFFIXES = {".txt", ".md", ".markdown", ".docx"}
 
 
 def _absolute(path: Path) -> Path:
@@ -209,6 +212,15 @@ def _default_output(source: Path) -> Path:
     return source.with_name(f"{source.stem}.tailored{suffix}")
 
 
+def _temporary_output(output: Path) -> Path:
+    """Return a same-directory temporary path with the genuine output suffix."""
+
+    token = uuid.uuid4().hex
+    return output.with_name(
+        f".{output.stem}.tmp-{token}{output.suffix.lower()}"
+    )
+
+
 def _selections(
     manifest: dict,
     approved: list[str],
@@ -283,11 +295,36 @@ def _verify_artifacts(
     return resume_paths[0]
 
 
+def _validate_output_path(
+    source: Path,
+    output: Path,
+    *,
+    force: bool,
+) -> None:
+    if output == source:
+        raise ValueError("output must not overwrite the source")
+    suffix = output.suffix.lower()
+    if suffix == ".pdf":
+        raise ValueError(
+            "PDF output requires a genuine PDF renderer; "
+            "choose DOCX or text output"
+        )
+    if suffix not in ALLOWED_OUTPUT_SUFFIXES:
+        raise ValueError(
+            "unsupported output format: "
+            f"{suffix or '<none>'}; choose TXT, Markdown, or DOCX"
+        )
+    if output.exists() and not force:
+        raise ValueError(
+            f"output already exists: {output}; set force=true to replace it"
+        )
+
+
 def apply_manifest(
     manifest_path: Path,
     approved: list[str] | None = None,
 ) -> dict:
-    """Apply only selected changes after verifying proposal and every input."""
+    """Apply selected changes only after verifying every temporary output."""
 
     manifest_path = manifest_path.expanduser().resolve()
     raw_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -390,29 +427,31 @@ def apply_manifest(
         _resolve_from(manifest_path.parent, approval.output)
         or _default_output(source)
     )
-    if output == source:
-        raise ValueError("output must not overwrite the source")
-    if output.suffix.lower() == ".pdf":
-        raise ValueError(
-            "PDF output requires a genuine PDF renderer; "
-            "choose DOCX or text output"
-        )
+    _validate_output_path(source, output, force=approval.force)
     mode = approval.document_mode
 
     original = load(source)["body_text"]
-    patch_document(source, output, materialized, mode=mode)
-    loaded_output = load(output)
-    updated = loaded_output["body_text"]
-    if updated == original:
-        raise ValueError("approved changes produced no output change")
-    for change in materialized:
-        if (
-            change["operation"] != "delete_span"
-            and change["replacement_text"] not in updated
-        ):
-            raise ValueError(
-                f"output verification failed for change {change['id']}"
-            )
+    temporary = _temporary_output(output)
+    loaded_output: dict
+    updated: str
+    try:
+        patch_document(source, temporary, materialized, mode=mode)
+        loaded_output = load(temporary)
+        updated = loaded_output["body_text"]
+        if updated == original:
+            raise ValueError("approved changes produced no output change")
+        for change in materialized:
+            if (
+                change["operation"] != "delete_span"
+                and change["replacement_text"] not in updated
+            ):
+                raise ValueError(
+                    f"output verification failed for change {change['id']}"
+                )
+        os.replace(temporary, output)
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        raise
 
     diff = "".join(
         difflib.unified_diff(
