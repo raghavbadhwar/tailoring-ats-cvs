@@ -1,99 +1,32 @@
-"""Evidence-backed rewrite variants and supported evidence surfacing."""
+"""Evidence-backed, section-aware rewrite proposals."""
 from __future__ import annotations
 
 import re
-from typing import Iterable
+from collections.abc import Iterable
 
 from .evidence import EvidenceItem, EvidenceLedger
+from .providers import (
+    DeterministicRewriteProvider,
+    RewriteContext,
+    RewriteProvider,
+    generate_with_fallback,
+)
 from .validation import validate_change
 
-GENERIC_PREFIXES = (
-    r"^Results[- ]driven\s+",
-    r"^Innovative\s+",
-    r"^Passionate about\s+",
-    r"^Cutting[- ]edge\s+",
-)
-
-
-def _safe_ownership_language(text: str) -> str:
-    rules = (
-        (r"^Helped\s+build\b", "Contributed to building"),
-        (r"^Helped\b", "Contributed to"),
-        (r"^Worked\s+on\b", "Contributed to"),
-        (r"^Assisted\s+with\b", "Supported"),
-        (r"^Assisted\b", "Supported"),
-        (r"^Participated\s+in\b", "Contributed to"),
-        (r"^Collaborated\s+on\b", "Contributed to"),
-        (r"^Responsible\s+for\b", "Contributed to"),
-    )
-    for pattern, replacement in rules:
-        updated = re.sub(pattern, replacement, text, count=1, flags=re.IGNORECASE)
-        if updated != text:
-            return updated
-    return text
-
-
-def _remove_generic(text: str) -> str:
-    result = text.strip()
-    for pattern in GENERIC_PREFIXES:
-        result = re.sub(pattern, "", result, count=1, flags=re.IGNORECASE)
-    result = re.sub(r"\b(?:leveraged|utilized)\s+AI\b", "used AI", result, flags=re.IGNORECASE)
-    return re.sub(r"\s+", " ", result).strip()
-
-
-def _surface_term(text: str, term: str) -> str:
-    if term.lower() in text.lower():
-        return text
-    replacements: dict[str, tuple[tuple[str, str], ...]] = {
-        "workflow automation": (
-            (r"(?:building\s+)?automated\s+order\s+workflows", "workflow automation for orders"),
-            (r"(?:building\s+)?automated\s+procurement\s+workflows", "workflow automation for procurement"),
-            (r"automated\s+workflows", "workflow automation"),
-            (r"workflow\s+systems", "workflow automation systems"),
-        ),
-        "human-in-the-loop": (
-            (r"approval-first", "human-in-the-loop"),
-            (r"approval[- ]gated", "human-in-the-loop"),
-            (r"human approval", "human-in-the-loop approval"),
-        ),
-        "product requirements": ((r"\bPRD\b", "product requirements document (PRD)"),),
-        "retrieval-augmented generation": ((r"\bRAG\b", "retrieval-augmented generation (RAG)"),),
-        "git": ((r"\bGitHub\b", "Git/GitHub"),),
-    }
-    for pattern, replacement in replacements.get(term, ()):
-        updated = re.sub(pattern, replacement, text, count=1, flags=re.IGNORECASE)
-        if updated != text:
-            return updated
-    return text
-
-
-def _compact(text: str) -> str:
-    result = re.sub(r"\b(?:successfully|various|multiple|really|very)\b", "", text, flags=re.IGNORECASE)
-    result = re.sub(r"workflow automation for orders", "order-workflow automation", result, flags=re.IGNORECASE)
-    result = re.sub(r"workflow automation for procurement", "procurement-workflow automation", result, flags=re.IGNORECASE)
-    result = re.sub(r"\s+", " ", result).strip()
-    return result
-
-
-def _variants(original: str, terms: Iterable[str]) -> list[dict]:
-    conservative = _safe_ownership_language(_remove_generic(original))
-    balanced = conservative
-    introduced: list[str] = []
-    for term in terms:
-        updated = _surface_term(balanced, term)
-        if updated != balanced:
-            balanced = updated
-            introduced.append(term)
-    compact = _compact(balanced)
-    variants: list[dict] = []
-    for variant_id, text in (
-        ("conservative", conservative),
-        ("balanced", balanced),
-        ("compact", compact),
-    ):
-        if text and all(existing["text"] != text for existing in variants):
-            variants.append({"id": variant_id, "text": text})
-    return variants
+_SECTION_HEADINGS: dict[str, tuple[str, ...]] = {
+    "summary": ("summary", "profile", "professional summary"),
+    "experience": (
+        "experience",
+        "work experience",
+        "professional experience",
+        "employment",
+    ),
+    "projects": ("projects", "selected projects", "project experience"),
+    "education": ("education", "academic background"),
+    "leadership": ("leadership", "positions of responsibility"),
+    "certifications": ("certifications", "certificates", "licenses"),
+    "skills": ("skills", "technical skills", "core skills"),
+}
 
 
 def _matches_by_evidence(matches: Iterable[dict]) -> dict[str, list[dict]]:
@@ -121,9 +54,8 @@ def _default_variant(variants: list[dict]) -> str:
 
 
 def _validated_change(change: dict, ledger: EvidenceLedger) -> dict:
-    variants = change.get("variants") or []
     valid_variants: list[dict] = []
-    for variant in variants:
+    for variant in change.get("variants") or []:
         candidate = {**change, "replacement_text": variant["text"]}
         try:
             validate_change(candidate, ledger)
@@ -142,16 +74,105 @@ def _validated_change(change: dict, ledger: EvidenceLedger) -> dict:
     return change
 
 
-def _find_projects_anchor(cv: str, ledger: EvidenceLedger) -> dict:
+def _normalized_heading(text: str) -> str:
+    return text.strip().rstrip(":").lower()
+
+
+def _heading_section(text: str) -> str | None:
+    normalized = _normalized_heading(text)
+    for section, headings in _SECTION_HEADINGS.items():
+        if normalized in headings:
+            return section
+    return None
+
+
+def _resume_section_for_item(cv: str, item: EvidenceItem) -> str:
+    if item.line_number is None:
+        return "projects"
+    section = "summary"
+    for index, line in enumerate(cv.splitlines(), 1):
+        if index > item.line_number:
+            break
+        detected = _heading_section(line)
+        if detected:
+            section = detected
+    return section
+
+
+def _supporting_section(item: EvidenceItem) -> str:
+    body = f"{item.source_file} {item.text}".lower()
+    if re.search(
+        r"\b(?:bachelor|master|degree|university|college|cgpa|gpa|education)\b",
+        body,
+    ):
+        return "education"
+    if re.search(
+        r"\b(?:certificate|certification|certified|license|licensed)\b",
+        body,
+    ):
+        return "certifications"
+    if re.search(
+        r"\b(?:worked at|intern(?:ed|ship)?|employed|employment|"
+        r"work experience|professional experience|role at|analyst at|"
+        r"associate at|consultant at)\b",
+        body,
+    ):
+        return "experience"
+    if re.search(
+        r"\b(?:president|secretary|chair|headed|led a team|managed a team|"
+        r"leadership)\b",
+        body,
+    ):
+        return "leadership"
+    return "projects"
+
+
+def _target_section(cv: str, item: EvidenceItem) -> str:
+    return (
+        _resume_section_for_item(cv, item)
+        if item.source == "resume"
+        else _supporting_section(item)
+    )
+
+
+def _find_section_anchor(
+    cv: str,
+    ledger: EvidenceLedger,
+    target_section: str,
+) -> dict:
+    headings = set(_SECTION_HEADINGS.get(target_section, (target_section,)))
     lines = cv.splitlines()
     for index, line in enumerate(lines, 1):
-        if line.strip().rstrip(":").lower() in {"projects", "selected projects", "project experience"}:
-            return {"part": "text", "line_number": index, "heading": line.strip()}
+        if _normalized_heading(line) in headings:
+            return {
+                "part": "text",
+                "line_number": index,
+                "heading": line.strip(),
+            }
+    if target_section != "projects":
+        project_anchor = _find_section_anchor(cv, ledger, "projects")
+        if project_anchor.get("heading"):
+            return project_anchor
     resume_items = [item for item in ledger.items if item.source == "resume"]
     if resume_items:
-        item = resume_items[-1]
-        return _anchor_for(item)
+        return _anchor_for(resume_items[-1])
     return {"part": "text", "line_number": len(lines), "heading": ""}
+
+
+def _variants_for(
+    provider: RewriteProvider,
+    *,
+    text: str,
+    terms: Iterable[str],
+    target_section: str,
+) -> tuple[list[dict], str, str, str | None]:
+    context = RewriteContext(
+        original_text=text,
+        terms=tuple(dict.fromkeys(str(term) for term in terms)),
+        target_section=target_section,
+        max_characters=max(120, min(500, len(text) * 2 + 40)),
+    )
+    return generate_with_fallback(provider, context)
 
 
 def propose_supported_changes(
@@ -159,7 +180,11 @@ def propose_supported_changes(
     requirements: Iterable[dict],
     matches: Iterable[dict],
     ledger: EvidenceLedger,
+    provider: RewriteProvider | None = None,
 ) -> list[dict]:
+    """Create evidence-bound proposals without editing the source document."""
+
+    selected_provider = provider or DeterministicRewriteProvider()
     requirement_ids = {item["id"] for item in requirements}
     matches = list(matches)
     match_index = _matches_by_evidence(matches)
@@ -173,41 +198,65 @@ def propose_supported_changes(
             for match in match_index.get(item.id, [])
             for term in match.get("normalized_terms", [])
         ]
-        variants = _variants(item.text, terms)
-        if not variants or all(variant["text"] == item.text for variant in variants):
+        section = _target_section(cv, item)
+        variants, provider_id, provider_version, fallback_reason = _variants_for(
+            selected_provider,
+            text=item.text,
+            terms=terms,
+            target_section=section,
+        )
+        if not variants or all(
+            variant["text"] == item.text for variant in variants
+        ):
             continue
         change = {
             "id": f"C{len(changes) + 1}",
             "kind": "language-rewrite",
             "operation": "replace_span",
             "anchor": _anchor_for(item),
+            "target_section": section,
             "expected_text": item.text,
             "variants": variants,
             "evidence_ids": [item.id],
             "supported": True,
             "ownership_before": item.ownership,
             "terms_introduced": sorted(set(terms)),
-            "reason": "Improve clarity and surface job terminology already supported by candidate evidence.",
+            "provider": provider_id,
+            "provider_version": provider_version,
+            "provider_fallback": fallback_reason,
+            "reason": (
+                "Improve clarity and surface job terminology already "
+                "supported by candidate evidence."
+            ),
         }
         try:
             changes.append(_validated_change(change, ledger))
         except ValueError:
             continue
 
-    # Surface supporting evidence that matches the JD but is absent from the CV.
     resume_ids = {item.id for item in ledger.items if item.source == "resume"}
     surfaced_ids: set[str] = set()
-    anchor = _find_projects_anchor(cv, ledger)
     for match in matches:
         if match.get("coverage") not in {"direct", "transferable"}:
             continue
-        supporting_ids = [eid for eid in match.get("evidence_ids", []) if eid not in resume_ids]
+        supporting_ids = [
+            evidence_id
+            for evidence_id in match.get("evidence_ids", [])
+            if evidence_id not in resume_ids
+        ]
         for evidence_id in supporting_ids:
             if evidence_id in surfaced_ids:
                 continue
             item = ledger.by_id()[evidence_id]
             terms = list(match.get("normalized_terms", []))
-            variants = _variants(item.text, terms)
+            section = _target_section(cv, item)
+            anchor = _find_section_anchor(cv, ledger, section)
+            variants, provider_id, provider_version, fallback_reason = _variants_for(
+                selected_provider,
+                text=item.text,
+                terms=terms,
+                target_section=section,
+            )
             if not variants:
                 continue
             change = {
@@ -215,13 +264,20 @@ def propose_supported_changes(
                 "kind": "surface-evidence",
                 "operation": "insert_after",
                 "anchor": anchor,
+                "target_section": section,
                 "expected_text": str(anchor.get("heading") or ""),
                 "variants": variants,
                 "evidence_ids": [item.id],
                 "supported": True,
                 "ownership_before": item.ownership,
                 "terms_introduced": sorted(set(terms)),
-                "reason": "Surface verified candidate evidence that is relevant to a supported job requirement but absent from the current CV.",
+                "provider": provider_id,
+                "provider_version": provider_version,
+                "provider_fallback": fallback_reason,
+                "reason": (
+                    "Surface candidate evidence relevant to a supported job "
+                    "requirement in the correct CV section."
+                ),
             }
             try:
                 changes.append(_validated_change(change, ledger))
@@ -248,7 +304,10 @@ def propose_supported_changes(
                 "evidence_ids": [],
                 "supported": False,
                 "requirement_id": requirement_id,
-                "reason": "No candidate evidence supports this requirement; do not insert it into the CV.",
+                "reason": (
+                    "No candidate evidence supports this requirement; do not "
+                    "insert it into the CV."
+                ),
             }
         )
     return changes
