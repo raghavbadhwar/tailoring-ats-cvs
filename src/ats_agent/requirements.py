@@ -179,6 +179,43 @@ def _contains_alias(text: str, alias: str) -> bool:
     )
 
 
+def _evidence_alias_match(term: str, alias: str, evidence_text: str) -> bool:
+    """Match evidence aliases conservatively when a token is ambiguous."""
+
+    if not _contains_alias(evidence_text, alias):
+        return False
+    body = evidence_text.casefold()
+    normalized = body.strip(" \t-*•.:")
+
+    if term == "react" and alias == "react":
+        if normalized == "react":
+            return True
+        if re.search(
+            r"\breact\s+(?:quickly|to|when|by|after|before|against)\b",
+            body,
+        ):
+            return False
+        return bool(
+            re.search(
+                r"\b(?:build|built|develop|developed|implement|implemented|"
+                r"use|used|using|frontend|front-end|component|components|"
+                r"application|app|framework|javascript|typescript|next\.?js)"
+                r"\b",
+                body,
+            )
+        )
+
+    if term == "retrieval-augmented generation" and alias == "rag":
+        return not bool(
+            re.search(
+                r"\bred[- ]amber[- ]green\b|\brag\s+status\b",
+                body,
+            )
+        )
+
+    return True
+
+
 def _parse_number(value: str) -> float:
     return float(value) if value.replace(".", "", 1).isdigit() else float(
         NUMBER_WORDS[value.lower()]
@@ -459,12 +496,12 @@ def _term_category(term: str) -> str:
 
 
 def _direct_match(term: str, evidence_text: str) -> bool:
-    return _contains_alias(evidence_text, term)
+    return _evidence_alias_match(term, term, evidence_text)
 
 
 def _alias_match(term: str, evidence_text: str) -> bool:
     return any(
-        _contains_alias(evidence_text, alias)
+        _evidence_alias_match(term, alias, evidence_text)
         for alias in TERM_ALIASES.get(term, (term,))
     )
 
