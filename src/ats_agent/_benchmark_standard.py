@@ -62,9 +62,11 @@ def _evaluate_standard_case(case: dict[str, Any]) -> dict[str, Any]:
     predicted_keys = {
         _requirement_key(requirement) for requirement in requirements
     }
+    unexpected_keys = sorted(predicted_keys - expected_keys)
+    missing_keys = sorted(expected_keys - predicted_keys)
     requirement_tp = len(expected_keys & predicted_keys)
-    requirement_fp = len(predicted_keys - expected_keys)
-    requirement_fn = len(expected_keys - predicted_keys)
+    requirement_fp = len(unexpected_keys)
+    requirement_fn = len(missing_keys)
 
     predicted_by_key = {
         _requirement_key(requirement): requirement
@@ -197,6 +199,8 @@ def _evaluate_standard_case(case: dict[str, Any]) -> dict[str, Any]:
         "requirement_tp": requirement_tp,
         "requirement_fp": requirement_fp,
         "requirement_fn": requirement_fn,
+        "unexpected_requirements": [list(key) for key in unexpected_keys],
+        "missing_requirements": [list(key) for key in missing_keys],
         "importance_hits": requirement_tp,
         "importance_total": len(expected_keys),
         "span_overlap_total": span_overlap_total,
