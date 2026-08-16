@@ -103,7 +103,7 @@ class MoreTests(unittest.TestCase):
             ],
         )
         requirements = extract_requirements("Kubernetes is required.")
-        self.assertFalse(
+        self.assertTrue(
             any(
                 "kubernetes" in requirement.get("normalized_terms", [])
                 for requirement in requirements

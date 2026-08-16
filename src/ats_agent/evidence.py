@@ -383,6 +383,7 @@ def _is_heading(line: str) -> bool:
         bool(stripped)
         and stripped.upper() == stripped
         and len(stripped.split()) <= 6
+        and not re.search(r"\d", stripped)
         and not SKILL_SIGNAL.search(stripped)
     )
 
