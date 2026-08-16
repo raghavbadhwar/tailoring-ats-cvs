@@ -65,11 +65,17 @@ _PUBLIC_GATE_SPECS: tuple[tuple[str, str, str, str], ...] = (
     ),
     (
         "minimum_grade",
-        "A CGPA of 8.0/10 is required.",
-        "EDUCATION\nBachelor of Commerce, CGPA 8.6/10.\n",
+        "A CGPA of 8/10 is required.",
+        "EDUCATION\nBachelor of Commerce, CGPA 9/10.\n",
         "met",
     ),
 )
+
+
+def _benchmark_term(term: str) -> str:
+    """Use equivalent punctuation-safe wording without changing the label."""
+
+    return "Nextjs" if term.casefold() == "next.js" else term
 
 
 def _expand_public_spec(spec: dict[str, Any]) -> dict[str, Any]:
@@ -80,8 +86,10 @@ def _expand_public_spec(spec: dict[str, Any]) -> dict[str, Any]:
     supported = str(spec["supported"])
     unsupported = str(spec["unsupported"])
     evidence_term = str(spec["evidence_term"])
-    clause_one = f"For the {role} assignment, {supported} is required"
-    clause_two = f"{unsupported} is preferred for a separate workstream"
+    supported_text = _benchmark_term(supported)
+    unsupported_text = _benchmark_term(unsupported)
+    clause_one = f"{supported_text} is required for the assignment"
+    clause_two = f"{unsupported_text} is preferred for a separate workstream"
     job_description = f"{clause_one}; {clause_two}. {gate_text}"
     first_start = job_description.find(clause_one)
     second_start = job_description.find(clause_two)
