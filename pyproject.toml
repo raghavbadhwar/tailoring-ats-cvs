@@ -32,7 +32,6 @@ dev = [
   "mypy>=1.10",
   "pip-audit>=2.7",
   "ruff>=0.6",
-  "skills-ref>=0.1",
 ]
 
 [project.urls]
