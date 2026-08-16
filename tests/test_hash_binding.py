@@ -42,17 +42,30 @@ class ProposalHashBindingTests(unittest.TestCase):
             company_context=company,
         )
         self.assertEqual(proposal["status"], "draft")
-        change = next(item for item in proposal["changes"] if item.get("supported"))
-        variant_id = change.get("default_variant") or change["variants"][0]["id"]
-        proposal_path.write_text(json.dumps(proposal, indent=2), encoding="utf-8")
+        change = next(
+            item for item in proposal["changes"] if item.get("supported")
+        )
+        variant_id = (
+            change.get("default_variant") or change["variants"][0]["id"]
+        )
+        proposal_path.write_text(
+            json.dumps(proposal, indent=2),
+            encoding="utf-8",
+        )
         manifest_path.write_text(
             json.dumps(
                 {
                     "schema_version": 2,
                     "proposal": str(proposal_path),
-                    "proposal_digest": proposal.get("proposal_digest", "missing"),
+                    "proposal_digest": proposal.get(
+                        "proposal_digest",
+                        "missing",
+                    ),
                     "selections": [
-                        {"change_id": change["id"], "variant_id": variant_id}
+                        {
+                            "change_id": change["id"],
+                            "variant_id": variant_id,
+                        }
                     ],
                     "approved_change_ids": [change["id"]],
                     "document_mode": "preserve",
@@ -70,6 +83,8 @@ class ProposalHashBindingTests(unittest.TestCase):
             "proposal": proposal,
             "proposal_path": proposal_path,
             "manifest": manifest_path,
+            "change": change,
+            "variant_id": variant_id,
         }
 
     def test_proposal_fingerprints_every_input_and_has_digest(self) -> None:
@@ -80,17 +95,52 @@ class ProposalHashBindingTests(unittest.TestCase):
             artifacts = proposal["artifacts"]
             self.assertEqual(
                 {item["kind"] for item in artifacts},
-                {"resume", "job_description", "candidate_evidence", "company_context"},
+                {
+                    "resume",
+                    "job_description",
+                    "candidate_evidence",
+                    "company_context",
+                },
             )
-            self.assertTrue(all(len(item["sha256"]) == 64 for item in artifacts))
+            self.assertTrue(
+                all(len(item["sha256"]) == 64 for item in artifacts)
+            )
             self.assertEqual(len(proposal["proposal_digest"]), 64)
+
+    def test_schema_v5_rejects_legacy_undigested_approval(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            case = self._prepare(root)
+            change = case["change"]
+            manifest = case["manifest"]
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "proposal": str(case["proposal_path"]),
+                        "selections": [
+                            {
+                                "change_id": change["id"],
+                                "variant_id": case["variant_id"],
+                            }
+                        ],
+                        "output": str(root / "legacy.txt"),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ValueError,
+                "digest-bound approval",
+            ):
+                apply_manifest(manifest)
 
     def test_changed_job_description_blocks_old_approval(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             case = self._prepare(Path(directory))
             job = case["job"]
             job.write_text(
-                job.read_text(encoding="utf-8") + "\nKubernetes is now mandatory.\n",
+                job.read_text(encoding="utf-8")
+                + "\nKubernetes is now mandatory.\n",
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(ValueError, "job_description.*hash"):
@@ -101,10 +151,14 @@ class ProposalHashBindingTests(unittest.TestCase):
             case = self._prepare(Path(directory))
             evidence = case["evidence"]
             evidence.write_text(
-                evidence.read_text(encoding="utf-8") + "\nChanged after proposal creation.\n",
+                evidence.read_text(encoding="utf-8")
+                + "\nChanged after proposal creation.\n",
                 encoding="utf-8",
             )
-            with self.assertRaisesRegex(ValueError, "candidate_evidence.*hash"):
+            with self.assertRaisesRegex(
+                ValueError,
+                "candidate_evidence.*hash",
+            ):
                 apply_manifest(case["manifest"])
 
     def test_changed_company_context_blocks_old_approval(self) -> None:
@@ -112,19 +166,28 @@ class ProposalHashBindingTests(unittest.TestCase):
             case = self._prepare(Path(directory))
             company = case["company"]
             company.write_text(
-                company.read_text(encoding="utf-8") + "\nContext changed after approval.\n",
+                company.read_text(encoding="utf-8")
+                + "\nContext changed after approval.\n",
                 encoding="utf-8",
             )
-            with self.assertRaisesRegex(ValueError, "company_context.*hash"):
+            with self.assertRaisesRegex(
+                ValueError,
+                "company_context.*hash",
+            ):
                 apply_manifest(case["manifest"])
 
     def test_edited_proposal_blocks_old_approval(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             case = self._prepare(Path(directory))
             proposal_path = case["proposal_path"]
-            proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+            proposal = json.loads(
+                proposal_path.read_text(encoding="utf-8")
+            )
             proposal["changes"][0]["reason"] = "tampered after review"
-            proposal_path.write_text(json.dumps(proposal, indent=2), encoding="utf-8")
+            proposal_path.write_text(
+                json.dumps(proposal, indent=2),
+                encoding="utf-8",
+            )
             with self.assertRaisesRegex(ValueError, "proposal digest"):
                 apply_manifest(case["manifest"])
 
