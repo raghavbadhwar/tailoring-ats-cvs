@@ -26,7 +26,7 @@ jobs:
       - name: Dependency audit
         run: pip-audit --local
       - name: Bandit source scan
-        run: bandit -r src/ats_agent -q
+        run: bandit -r src/ats_agent -q -ll
       - name: Scan tracked files for credential-shaped secrets
         shell: bash
         run: |
