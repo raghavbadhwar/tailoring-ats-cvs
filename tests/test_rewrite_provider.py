@@ -29,8 +29,39 @@ class DeterministicRewriteProviderTests(unittest.TestCase):
             )
         )
         self.assertTrue(
-            all(len(variant["text"]) <= context.max_characters for variant in variants)
+            all(
+                len(variant["text"]) <= context.max_characters
+                for variant in variants
+            )
         )
+
+    def test_safe_leading_verbs_still_produce_three_non_noop_variants(self) -> None:
+        provider = DeterministicRewriteProvider()
+        originals = (
+            "Supported agentic workflows for support triage, with reviewable implementation notes.",
+            "Contributed to analytics for portfolio monitoring, with traceable operating controls.",
+        )
+        for original in originals:
+            with self.subTest(original=original):
+                variants = provider.generate(
+                    RewriteContext(
+                        original_text=original,
+                        terms=(),
+                        target_section="projects",
+                        max_characters=220,
+                    )
+                )
+                self.assertEqual(
+                    {variant["id"] for variant in variants},
+                    {"conservative", "balanced", "compact"},
+                )
+                self.assertEqual(
+                    len({variant["text"] for variant in variants}),
+                    3,
+                )
+                self.assertTrue(
+                    all(variant["text"] != original for variant in variants)
+                )
 
     def test_provider_exposes_stable_identity(self) -> None:
         provider = DeterministicRewriteProvider()
