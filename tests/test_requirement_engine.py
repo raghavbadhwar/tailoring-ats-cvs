@@ -32,7 +32,7 @@ class RequirementEngineTests(unittest.TestCase):
 
     def test_semicolon_clauses_keep_local_importance(self) -> None:
         requirements = extract_requirements(
-            "Python is required; Kubernetes is preferred. "
+            "Python is required; Docker is preferred. "
             "Candidates must be authorized to work in India."
         )
         self.assertEqual(
@@ -40,7 +40,7 @@ class RequirementEngineTests(unittest.TestCase):
             "mandatory",
         )
         self.assertEqual(
-            self.requirement_for(requirements, "kubernetes")["importance"],
+            self.requirement_for(requirements, "docker")["importance"],
             "preferred",
         )
         authorization = next(
@@ -67,7 +67,7 @@ class RequirementEngineTests(unittest.TestCase):
             "- Authorized to work in India without sponsorship.\n"
             "- Available for hybrid work and willing to travel up to 30%.\n"
             "EDUCATION\n"
-            "CGPA 8.5/10.\n"
+            "- Earned CGPA 8.5/10.\n"
         )
         gates = evaluate_hard_gates(requirements, ledger)
         for kind in (
@@ -89,7 +89,10 @@ class RequirementEngineTests(unittest.TestCase):
             requirements,
             self.ledger("ELIGIBILITY\n- I require visa sponsorship.\n"),
         )
-        self.assertEqual(self.gate_for(gates, "sponsorship")["status"], "unmet")
+        self.assertEqual(
+            self.gate_for(gates, "sponsorship")["status"],
+            "unmet",
+        )
 
     def test_academic_years_do_not_satisfy_experience_gate(self) -> None:
         requirements = extract_requirements(
@@ -110,9 +113,7 @@ class RequirementEngineTests(unittest.TestCase):
         )
 
     def test_project_year_does_not_satisfy_graduation_gate(self) -> None:
-        requirements = extract_requirements(
-            "Applicants must graduate in 2027."
-        )
+        requirements = extract_requirements("Applicants must graduate in 2027.")
         gates = evaluate_hard_gates(
             requirements,
             self.ledger("PROJECTS\n- Built a Python project in 2027.\n"),
@@ -130,11 +131,17 @@ class RequirementEngineTests(unittest.TestCase):
             requirements,
             self.ledger(
                 "ELIGIBILITY\n- Available only for remote work.\n"
-                "EDUCATION\nCGPA 7.5/10.\n"
+                "EDUCATION\n- Earned CGPA 7.5/10.\n"
             ),
         )
-        self.assertEqual(self.gate_for(gates, "work_mode")["status"], "unmet")
-        self.assertEqual(self.gate_for(gates, "minimum_grade")["status"], "unmet")
+        self.assertEqual(
+            self.gate_for(gates, "work_mode")["status"],
+            "unmet",
+        )
+        self.assertEqual(
+            self.gate_for(gates, "minimum_grade")["status"],
+            "unmet",
+        )
 
 
 if __name__ == "__main__":
