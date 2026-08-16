@@ -1,12 +1,19 @@
 # Changelog
 
-## Unreleased
+## 1.0.0-beta.1 — pending protected release gate
 
-- Established a visible, reproducible release baseline from the last green ordinary-source tree.
-- Added a release-integrity checker that rejects encoded source payloads and self-replacing workflows.
-- Enforced release-tree integrity before linting, tests, benchmarks, packaging, and the end-to-end workflow.
-- Upgraded GitHub Actions to the current Node 24-compatible checkout and Python setup actions.
-- Restored and verified the Python 3.10, 3.11, 3.12, and 3.13 compatibility matrix.
+- Replaced hidden/encoded release payloads with one ordinary, reviewable source tree.
+- Added candidate-scoped artifact fingerprints, canonical proposal digests, and schema-v2 explicit approvals.
+- Added atomic evidence claims with metric value/unit/scope binding and ownership ceilings.
+- Added clause-level requirement extraction, hard-gate evaluation, and indexed evidence matching.
+- Added deterministic section-aware conservative, balanced, and compact rewrite variants.
+- Added transactional output application, existing-output protection, and post-write verification.
+- Improved DOCX preservation for mixed runs, table-cell insertions, headers, and unrelated OOXML parts.
+- Unified review generation with full and redacted modes and an explicit `approve` CLI command.
+- Added Benchmark v3 public, adversarial, document, smoke, and human-evaluation queue infrastructure with hashes, confidence intervals, baselines, and diversity checks.
+- Added Python 3.10–3.13 Linux/Windows compatibility checks and a 90% branch-coverage release gate.
+- Added dependency auditing, Bandit, CodeQL, dependency review, credential-shaped secret scanning, CycloneDX SBOM generation, and a protected tag-based release workflow.
+- Added a fail-closed private-holdout release hook; the private cases themselves are never committed or uploaded as release artifacts.
 
 ## 0.9.0
 
@@ -19,4 +26,4 @@
 - Added anchored text editing, DOCX preserve mode, ATS-safe rebuild mode, and PDF-output blocking.
 - Added final re-parse, hashes, diff, formatting audit, and applied-change log.
 - Added `prepare`, `validate`, and `doctor` CLI commands.
-- Added a 100-case benchmark and CI regression gates.
+- Added the legacy regression benchmark and CI gates.
