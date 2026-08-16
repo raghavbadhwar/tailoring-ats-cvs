@@ -15,6 +15,7 @@ REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
 W_NS_URI = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 XML_SPACE = "{http://www.w3.org/XML/1998/namespace}space"
 SUPPORTED_PRESERVE_PARTS = {None, "", "text", "word/document.xml"}
+SUPPORTED_OUTPUT_SUFFIXES = {".txt", ".md", ".docx"}
 ElementTree.register_namespace("w", W_NS_URI)
 
 
@@ -147,7 +148,7 @@ def _replace_paragraph_span(
     if not affected:
         raise ValueError("expected text has no editable DOCX text nodes")
 
-    first_node, first_start, first_end, first_text = affected[0]
+    first_node, first_start, _, first_text = affected[0]
     prefix = first_text[: max(start - first_start, 0)]
     if len(affected) == 1:
         suffix = first_text[max(end - first_start, 0) :]
@@ -210,7 +211,9 @@ def _validate_preserve_parts(changes: list[dict]) -> None:
             )
 
 
-def _parent_map(root: ElementTree.Element) -> dict[ElementTree.Element, ElementTree.Element]:
+def _parent_map(
+    root: ElementTree.Element,
+) -> dict[ElementTree.Element, ElementTree.Element]:
     return {
         child: parent
         for parent in root.iter()
@@ -243,7 +246,9 @@ def _patch_docx_xml(xml: bytes, changes: list[dict]) -> bytes:
             change["expected_text"],
         )
         replacement = (
-            "" if change["operation"] == "delete_span" else change["replacement_text"]
+            ""
+            if change["operation"] == "delete_span"
+            else change["replacement_text"]
         )
         try:
             _replace_paragraph_span(
@@ -305,7 +310,9 @@ def _apply_text(text: str, changes: list[dict]) -> str:
                 f"change {change['id']} expected text was not found exactly once"
             )
         replacement = (
-            "" if change["operation"] == "delete_span" else change["replacement_text"]
+            ""
+            if change["operation"] == "delete_span"
+            else change["replacement_text"]
         )
         result = result.replace(expected, replacement, 1)
 
@@ -357,15 +364,18 @@ def patch_document(
     output = output.expanduser().resolve()
     if output == source:
         raise ValueError("output must not overwrite the source")
-    if output.suffix.lower() == ".pdf":
+    output_suffix = output.suffix.lower()
+    if output_suffix not in SUPPORTED_OUTPUT_SUFFIXES:
+        supported = ", ".join(sorted(SUPPORTED_OUTPUT_SUFFIXES))
         raise ValueError(
-            "PDF output requires a genuine PDF renderer; choose DOCX or text output"
+            f"unsupported output format {output_suffix or '<none>'}; "
+            f"choose one of: {supported}"
         )
     output.parent.mkdir(parents=True, exist_ok=True)
     source_suffix = source.suffix.lower()
     if (
         source_suffix == ".docx"
-        and output.suffix.lower() == ".docx"
+        and output_suffix == ".docx"
         and mode == "preserve"
     ):
         with zipfile.ZipFile(source) as archive:
@@ -382,7 +392,7 @@ def patch_document(
 
     loaded = load(source)
     updated = _apply_text(loaded["body_text"], changes)
-    if output.suffix.lower() == ".docx":
+    if output_suffix == ".docx":
         write_ats_docx(output, updated)
     else:
         output.write_text(updated, encoding="utf-8")
