@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import tomllib
+import re
 import zipfile
 from pathlib import Path
 
@@ -12,7 +12,10 @@ FIXED_TIME = (1980, 1, 1, 0, 0, 0)
 
 
 def _version(root: Path) -> str:
-    return tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    match = re.search(r'^version\s*=\s*"([^"]+)"', (root / "pyproject.toml").read_text(encoding="utf-8"), re.MULTILINE)
+    if match is None:
+        raise ValueError("project version not found")
+    return match.group(1)
 
 
 def _write(archive: zipfile.ZipFile, name: str, source: Path, executable: bool = False) -> None:
