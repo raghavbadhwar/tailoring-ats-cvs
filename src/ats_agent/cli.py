@@ -5,11 +5,15 @@ import argparse
 import json
 import os
 import sys
-from importlib import resources
 from importlib.util import find_spec
 from pathlib import Path
 
-from .benchmark import run as run_benchmark
+from .benchmark import (
+    BenchmarkGateError,
+    SUITE_FILENAMES,
+    run as run_benchmark,
+    run_suite,
+)
 from .formatting import audit_file
 from .ingestion import load
 from .review import (
@@ -34,7 +38,10 @@ def _selection(value: str) -> tuple[str, str | None]:
         raise argparse.ArgumentTypeError(
             "selection must use CHANGE_ID or CHANGE_ID:VARIANT_ID"
         )
-    return change_id.strip(), variant_id.strip() if separator and variant_id.strip() else None
+    return (
+        change_id.strip(),
+        variant_id.strip() if separator and variant_id.strip() else None,
+    )
 
 
 def _add_analysis_inputs(command: argparse.ArgumentParser) -> None:
@@ -75,7 +82,10 @@ def _proposal_from_args(args: argparse.Namespace) -> dict:
 def _write_json(path: Path, payload: object) -> None:
     path = path.expanduser().resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(payload, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
 def _write_review(
@@ -136,12 +146,22 @@ def _write_approval(args: argparse.Namespace) -> dict:
     }
 
 
-def _run_benchmark(dataset: str | None) -> dict:
+def _run_benchmark(
+    dataset: str | None,
+    suite: str,
+    report: str | None,
+) -> dict:
+    report_path = Path(report) if report else None
     if dataset:
-        return run_benchmark(Path(dataset))
-    packaged = resources.files("ats_agent").joinpath("data/cases.jsonl")
-    with resources.as_file(packaged) as path:
-        return run_benchmark(path)
+        if suite != "smoke":
+            raise BenchmarkGateError(
+                "--dataset cannot be combined with a non-default --suite"
+            )
+        result = run_benchmark(Path(dataset))
+        if report_path is not None:
+            _write_json(report_path, result)
+        return result
+    return run_suite(suite, report_path=report_path)
 
 
 def _doctor() -> dict:
@@ -160,11 +180,14 @@ def _doctor() -> dict:
             "redacted_review": True,
             "digest_bound_approval": True,
             "transactional_apply": True,
+            "benchmark_v3": True,
         },
     }
 
 
 def _error_exit_code(exc: Exception) -> int:
+    if isinstance(exc, BenchmarkGateError):
+        return 7
     message = str(exc).lower()
     if any(
         marker in message
@@ -210,7 +233,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="ats-agent")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    audit = sub.add_parser("audit", help="validate inputs and emit analysis JSON")
+    audit = sub.add_parser(
+        "audit",
+        help="validate inputs and emit analysis JSON",
+    )
     _add_analysis_inputs(audit)
 
     propose = sub.add_parser(
@@ -261,7 +287,11 @@ def main(argv: list[str] | None = None) -> int:
         type=_selection,
         help="CHANGE_ID or CHANGE_ID:VARIANT_ID; repeatable",
     )
-    approve.add_argument("--output", required=True, help="approval manifest path")
+    approve.add_argument(
+        "--output",
+        required=True,
+        help="approval manifest path",
+    )
     approve.add_argument(
         "--output-document",
         default="tailored-resume.docx",
@@ -277,7 +307,10 @@ def main(argv: list[str] | None = None) -> int:
         help="allow replacement of an existing final output at apply time",
     )
 
-    formatting = sub.add_parser("format", help="audit ATS-friendly formatting")
+    formatting = sub.add_parser(
+        "format",
+        help="audit ATS-friendly formatting",
+    )
     formatting.add_argument("resume", type=_existing)
 
     apply_command = sub.add_parser(
@@ -292,17 +325,40 @@ def main(argv: list[str] | None = None) -> int:
     )
     validate.add_argument("document", type=_existing)
 
-    benchmark = sub.add_parser("benchmark", help="run the offline benchmark")
-    benchmark.add_argument("--dataset", type=_existing)
+    benchmark = sub.add_parser(
+        "benchmark",
+        help="run a frozen Benchmark v3 suite",
+    )
+    benchmark.add_argument(
+        "--suite",
+        choices=tuple(sorted(SUITE_FILENAMES)),
+        default="smoke",
+    )
+    benchmark.add_argument(
+        "--dataset",
+        type=_existing,
+        help="custom JSONL dataset using the legacy or v3 schema",
+    )
+    benchmark.add_argument(
+        "--report",
+        help="write the complete machine-readable report to this path",
+    )
 
-    sub.add_parser("doctor", help="show local capabilities and optional dependencies")
+    sub.add_parser(
+        "doctor",
+        help="show local capabilities and optional dependencies",
+    )
     args = parser.parse_args(argv)
 
     try:
         if args.command == "doctor":
             payload = _doctor()
         elif args.command == "benchmark":
-            payload = _run_benchmark(args.dataset)
+            payload = _run_benchmark(
+                args.dataset,
+                args.suite,
+                args.report,
+            )
         elif args.command == "format":
             payload = audit_file(args.resume)
         elif args.command == "validate":
@@ -347,7 +403,10 @@ def main(argv: list[str] | None = None) -> int:
             payload = apply_manifest(Path(args.approval_manifest))
     except (ValueError, OSError, json.JSONDecodeError) as exc:
         print(
-            json.dumps({"status": "blocked", "error": str(exc)}, indent=2),
+            json.dumps(
+                {"status": "blocked", "error": str(exc)},
+                indent=2,
+            ),
             file=sys.stderr,
         )
         return _error_exit_code(exc)

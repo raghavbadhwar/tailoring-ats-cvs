@@ -1,0 +1,50 @@
+{"_type": "human-v3", "domain": "procurement approvals", "id": "human-01", "role": "agent reliability analyst", "role_family": "ai-automation", "supported": "python"}
+{"_type": "human-v3", "domain": "margin review", "id": "human-02", "role": "portfolio reporting associate", "role_family": "finance-analytics", "supported": "power bi"}
+{"_type": "human-v3", "domain": "market entry", "id": "human-03", "role": "transformation analyst", "role_family": "consulting-operations", "supported": "market sizing"}
+{"_type": "human-v3", "domain": "roadmap governance", "id": "human-04", "role": "technical programme coordinator", "role_family": "product-program", "supported": "data analysis"}
+{"_type": "human-v3", "domain": "service integration", "id": "human-05", "role": "cloud engineering associate", "role_family": "software-data", "supported": "react"}
+{"_type": "human-v3", "domain": "financial reconciliations", "id": "human-06", "role": "agent tooling analyst", "role_family": "ai-automation", "supported": "testing"}
+{"_type": "human-v3", "domain": "investment screening", "id": "human-07", "role": "treasury reporting coordinator", "role_family": "finance-analytics", "supported": "market research"}
+{"_type": "human-v3", "domain": "delivery governance", "id": "human-08", "role": "operating model associate", "role_family": "consulting-operations", "supported": "power bi"}
+{"_type": "human-v3", "domain": "requirements discovery", "id": "human-09", "role": "roadmap operations analyst", "role_family": "product-program", "supported": "excel"}
+{"_type": "human-v3", "domain": "release checks", "id": "human-10", "role": "developer tooling analyst", "role_family": "software-data", "supported": "git"}
+{"_type": "human-v3", "domain": "order routing", "id": "human-11", "role": "agent quality coordinator", "role_family": "ai-automation", "supported": "supabase"}
+{"_type": "human-v3", "domain": "market tracking", "id": "human-12", "role": "risk reporting analyst", "role_family": "finance-analytics", "supported": "testing"}
+{"_type": "human-v3", "domain": "supplier consolidation", "id": "human-13", "role": "growth strategy associate", "role_family": "consulting-operations", "supported": "stakeholder management"}
+{"_type": "human-v3", "domain": "release planning", "id": "human-14", "role": "product research analyst", "role_family": "product-program", "supported": "stakeholder management"}
+{"_type": "human-v3", "domain": "access control", "id": "human-15", "role": "cloud operations analyst", "role_family": "software-data", "supported": "gcp"}
+{"_type": "human-v3", "domain": "contract review", "id": "human-16", "role": "knowledge pipeline coordinator", "role_family": "ai-automation", "supported": "human-in-the-loop"}
+{"_type": "human-v3", "domain": "pricing decisions", "id": "human-17", "role": "investment research associate", "role_family": "finance-analytics", "supported": "financial analysis"}
+{"_type": "human-v3", "domain": "process standardisation", "id": "human-18", "role": "operations research associate", "role_family": "consulting-operations", "supported": "data analysis"}
+{"_type": "human-v3", "domain": "programme controls", "id": "human-19", "role": "product planning associate", "role_family": "product-program", "supported": "testing"}
+{"_type": "human-v3", "domain": "schema migration", "id": "human-20", "role": "data infrastructure associate", "role_family": "software-data", "supported": "sql"}
+{"_type": "human-v3", "domain": "vendor onboarding", "id": "human-21", "role": "AI testing coordinator", "role_family": "ai-automation", "supported": "git"}
+{"_type": "human-v3", "domain": "cost allocation", "id": "human-22", "role": "performance reporting analyst", "role_family": "finance-analytics", "supported": "procurement"}
+{"_type": "human-v3", "domain": "performance improvement", "id": "human-23", "role": "enterprise transformation analyst", "role_family": "consulting-operations", "supported": "testing"}
+{"_type": "human-v3", "domain": "feedback synthesis", "id": "human-24", "role": "portfolio programme associate", "role_family": "product-program", "supported": "react"}
+{"_type": "human-v3", "domain": "event processing", "id": "human-25", "role": "data engineering analyst", "role_family": "software-data", "supported": "api"}
+{"_type": "human-v3", "domain": "support triage", "id": "human-26", "role": "workflow integration specialist", "role_family": "ai-automation", "supported": "ai agents"}
+{"_type": "human-v3", "domain": "portfolio monitoring", "id": "human-27", "role": "valuation support analyst", "role_family": "finance-analytics", "supported": "tableau"}
+{"_type": "human-v3", "domain": "cost transformation", "id": "human-28", "role": "process redesign associate", "role_family": "consulting-operations", "supported": "procurement"}
+{"_type": "human-v3", "domain": "launch readiness", "id": "human-29", "role": "programme research analyst", "role_family": "product-program", "supported": "workflow automation"}
+{"_type": "human-v3", "domain": "query optimisation", "id": "human-30", "role": "platform integration specialist", "role_family": "software-data", "supported": "azure"}
+{"_type": "human-v3", "domain": "customer feedback", "id": "human-31", "role": "agent tooling coordinator", "role_family": "ai-automation", "supported": "api"}
+{"_type": "human-v3", "domain": "variance reporting", "id": "human-32", "role": "reporting controls specialist", "role_family": "finance-analytics", "supported": "market sizing"}
+{"_type": "human-v3", "domain": "customer operations", "id": "human-33", "role": "procurement advisory analyst", "role_family": "consulting-operations", "supported": "product requirements"}
+{"_type": "human-v3", "domain": "delivery tracking", "id": "human-34", "role": "programme operations analyst", "role_family": "product-program", "supported": "sql"}
+{"_type": "human-v3", "domain": "web delivery", "id": "human-35", "role": "developer productivity associate", "role_family": "software-data", "supported": "javascript"}
+{"_type": "human-v3", "domain": "quality audits", "id": "human-36", "role": "workflow validation associate", "role_family": "ai-automation", "supported": "aws"}
+{"_type": "human-v3", "domain": "monthly forecasting", "id": "human-37", "role": "commercial finance analyst", "role_family": "finance-analytics", "supported": "excel"}
+{"_type": "human-v3", "domain": "service redesign", "id": "human-38", "role": "operations improvement associate", "role_family": "consulting-operations", "supported": "market research"}
+{"_type": "human-v3", "domain": "customer onboarding", "id": "human-39", "role": "product discovery analyst", "role_family": "product-program", "supported": "market research"}
+{"_type": "human-v3", "domain": "deployment validation", "id": "human-40", "role": "software quality analyst", "role_family": "software-data", "supported": "supabase"}
+{"_type": "human-v3", "domain": "inventory exceptions", "id": "human-41", "role": "knowledge operations specialist", "role_family": "ai-automation", "supported": "retrieval-augmented generation"}
+{"_type": "human-v3", "domain": "budget controls", "id": "human-42", "role": "unit economics analyst", "role_family": "finance-analytics", "supported": "data analysis"}
+{"_type": "human-v3", "domain": "commercial diligence", "id": "human-43", "role": "commercial diligence analyst", "role_family": "consulting-operations", "supported": "excel"}
+{"_type": "human-v3", "domain": "platform migration", "id": "human-44", "role": "product enablement associate", "role_family": "product-program", "supported": "api"}
+{"_type": "human-v3", "domain": "developer tooling", "id": "human-45", "role": "database operations associate", "role_family": "software-data", "supported": "aws"}
+{"_type": "human-v3", "domain": "compliance checks", "id": "human-46", "role": "workflow governance analyst", "role_family": "ai-automation", "supported": "postgres"}
+{"_type": "human-v3", "domain": "revenue assurance", "id": "human-47", "role": "FP&A operations associate", "role_family": "finance-analytics", "supported": "python"}
+{"_type": "human-v3", "domain": "implementation planning", "id": "human-48", "role": "service operations consultant", "role_family": "consulting-operations", "supported": "api"}
+{"_type": "human-v3", "domain": "feature discovery", "id": "human-49", "role": "feature operations associate", "role_family": "product-program", "supported": "product requirements"}
+{"_type": "human-v3", "domain": "data ingestion", "id": "human-50", "role": "software delivery associate", "role_family": "software-data", "supported": "typescript"}

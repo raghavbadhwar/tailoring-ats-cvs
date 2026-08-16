@@ -37,7 +37,7 @@ ats-agent = "ats_agent.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-ats_agent = ["data/*.jsonl"]
+ats_agent = ["data/*.jsonl", "data/benchmark-v3/*.jsonl"]
 
 [tool.ruff]
 line-length = 110
