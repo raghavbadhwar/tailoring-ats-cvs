@@ -7,6 +7,8 @@ import zipfile
 from pathlib import Path
 from xml.etree import ElementTree
 
+from defusedxml.ElementTree import fromstring as safe_fromstring
+
 from .ingestion import WORD_NS, load
 
 REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
@@ -218,7 +220,7 @@ def _parent_map(root: ElementTree.Element) -> dict[ElementTree.Element, ElementT
 
 def _patch_docx_xml(xml: bytes, changes: list[dict]) -> bytes:
     _validate_preserve_parts(changes)
-    root = ElementTree.fromstring(xml)
+    root = safe_fromstring(xml)
     body = root.find(WORD_NS + "body")
     if body is None:
         raise ValueError("DOCX body is missing")
@@ -379,8 +381,4 @@ def patch_document(
         return
 
     loaded = load(source)
-    updated = _apply_text(loaded["body_text"], changes)
-    if output.suffix.lower() == ".docx":
-        write_ats_docx(output, updated)
-    else:
-        output.write_text(updated, encoding="utf-8")
+    updated = _
