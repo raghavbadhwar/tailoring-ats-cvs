@@ -125,7 +125,7 @@ def _expand_public_spec(spec: dict[str, Any]) -> dict[str, Any]:
     supported = str(spec["supported"])
     unsupported = str(spec["unsupported"])
     evidence_term = str(spec["evidence_term"])
-    context = str(spec["context"])
+    context = str(spec.get("context") or "role-specific evaluation")
     supported_text = _benchmark_term(supported)
     unsupported_text = _benchmark_term(unsupported)
     clause_one = f"{supported_text} is required for the assignment"
