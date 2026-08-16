@@ -139,10 +139,7 @@ def _baselines(
     exact_hits = 0
     alias_hits = 0
     expected_unsupported = 0
-    try:
-        from .requirements import TERM_ALIASES
-    except ImportError:
-        TERM_ALIASES = {}  # type: ignore[assignment]
+    from .requirements import TERM_ALIASES
 
     for case in cases:
         resume = str(case.get("resume") or "").casefold()
