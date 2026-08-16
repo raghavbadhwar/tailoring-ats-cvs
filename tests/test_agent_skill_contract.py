@@ -20,6 +20,7 @@ class AgentRepositoryContractTests(unittest.TestCase):
         self.assertIn("name: tailor-cv", body)
         self.assertIn("scripts/ensure_cli.py", body)
         self.assertIn("scripts/run_cli.py", body)
+        self.assertIn("CODEX_HOME", body)
         self.assertIn("explicit approval", body.lower())
         for path in ("references/approval-policy.md", "references/cli-contract.md", "references/installation.md", "references/proposal-fields.md", "references/troubleshooting.md", "scripts/ensure_cli.py", "scripts/run_cli.py", "scripts/summarize_proposal.py", "assets/bootstrap-policy.json"):
             self.assertTrue((skill.parent / path).is_file(), path)
