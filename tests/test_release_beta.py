@@ -12,8 +12,8 @@ class BetaReleaseContractTests(unittest.TestCase):
         pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
         match = re.search(r'^version\s*=\s*"([^"]+)"', pyproject, flags=re.MULTILINE)
         self.assertIsNotNone(match)
-        self.assertEqual(match.group(1), "1.0.0b1")
-        self.assertEqual(ats_agent.__version__, "1.0.0b1")
+        self.assertEqual(match.group(1), "1.0.0b2")
+        self.assertEqual(ats_agent.__version__, "1.0.0b2")
 
     def test_release_workflow_requires_protected_holdout_before_publish(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")

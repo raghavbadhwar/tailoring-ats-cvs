@@ -27,7 +27,10 @@ jobs:
           python scripts/validate_skill.py
           python scripts/validate_benchmark_diversity.py
       - name: Build reproducible agent adapter bundles
-        run: python scripts/build_adapter_bundles.py --output-dir /tmp/ats-agent-adapters
+        run: |
+          python scripts/validate_agent_adapters.py
+          python scripts/build_agent_bundles.py --output /tmp/ats-agent-adapters
+          python scripts/verify_agent_bundle.py /tmp/ats-agent-adapters
       - name: Check repository whitespace
         run: git diff --check
       - name: Lint
@@ -152,3 +155,22 @@ jobs:
           ats-agent --help
           ats-agent --version
           ats-agent benchmark --suite smoke
+
+  agent-adapters:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - run: python -m pip install -e ".[dev,documents]"
+      - run: python scripts/validate_agent_adapters.py
+      - run: python -m unittest tests.test_agent_bootstrap tests.test_agent_cli_runner tests.test_agent_proposal_summary tests.test_agent_skill_contract tests.test_claude_plugin_contract tests.test_agent_adapter_e2e tests.test_agent_bundle_build tests.test_agent_adapter_validation -v
+      - run: python scripts/build_agent_bundles.py --output dist/agent-adapters
+      - run: python scripts/verify_agent_bundle.py dist/agent-adapters

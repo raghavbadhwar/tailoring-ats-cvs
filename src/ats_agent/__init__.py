@@ -1,3 +1,9 @@
 """Evidence-grounded CV tailoring and career intelligence workflow."""
+from importlib.metadata import PackageNotFoundError, version
 
-__version__ = "1.0.0b1"
+try:
+    __version__ = version("tailoring-ats-cvs")
+except PackageNotFoundError:
+    __version__ = "0+unknown"
+
+__all__ = ["__version__"]

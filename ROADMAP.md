@@ -1,5 +1,9 @@
 # Roadmap
 
+## v1.0.0-beta.2 — agent-native beta
+
+- Validate the CLI-first Codex and Claude Code adapters before considering MCP or a web UI.
+
 ## v1.0.0-beta.1 — trustworthy engineering beta
 
 Implemented on the `agent/trustworthy-v1` release branch:

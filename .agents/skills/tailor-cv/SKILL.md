@@ -1,33 +1,20 @@
 ---
 name: tailor-cv
-description: Prepare, review, approve, apply, and validate evidence-grounded CV changes with the local ats-agent CLI. Use for CV tailoring or setup diagnosis; never bypass the explicit approval boundary.
+description: Audit and tailor a candidate CV against a job description using the local ats-agent CLI. Use for CV assessment, evidence mapping, review, explicit approval, application, or validation.
+metadata:
+  author: raghavbadhwar
+  version: "1.0.0-beta.2"
+  repository: "https://github.com/raghavbadhwar/tailoring-ats-cvs"
 ---
 
 # Tailor CV
 
-Use `ats-agent` as the source of truth. Do not recreate CV analysis, matching, or document editing in prompts.
+Use `ats-agent` as the authoritative engine. Do not recreate its analysis or edit a CV directly.
 
-The required control sequence is `PROPOSE → EXPLICIT APPROVAL → APPLY → VALIDATE`.
+1. Run `python scripts/ensure_cli.py --check`. If it reports `bootstrap_required` or `upgrade_required`, show the recommended command and ask for permission. Do not run `--install` before permission.
+2. Require a CV and job-description path; use a fresh user-selected run directory outside the skill or plugin. Evidence files are optional candidate evidence; company context is not candidate evidence.
+3. Prepare only: `python scripts/run_cli.py -- prepare "<resume>" "<job-description>" --candidate-id "<candidate-id>" --out "<run-directory>"`.
+4. Summarize: `python scripts/summarize_proposal.py "<run-directory>/proposal.json" --output "<run-directory>/summary.json"`. Present hard gates, evidence mapping, gaps, supported changes, variants, evidence IDs, sections, and digest. Stop for explicit approval such as `C1:balanced, C3:compact`.
+5. Only after explicit approval: `python scripts/run_cli.py -- approve "<run-directory>/proposal.json" --select C1:balanced --output "<run-directory>/approval.json" --output-document "<run-directory>/tailored-resume.docx"`; then run `apply` and `validate` through `scripts/run_cli.py`.
 
-## Check the CLI first
-
-Run:
-
-```bash
-command -v ats-agent
-ats-agent doctor
-ats-agent --help
-ats-agent benchmark --suite smoke
-```
-
-If it is missing or unhealthy, run `scripts/check-install.py --json` and show the relevant pinned command. Ask for explicit permission before any installation. Do not run `install.sh --approved` or `install.ps1 -Approved` until the user grants that permission. For a restricted environment, give the manual command from the checker instead.
-
-## Workflow
-
-1. `PROPOSE`: Create a fresh run directory and run `ats-agent prepare <resume> <job-description> --candidate-id <id> --out <run-dir>`, adding each candidate-evidence file with `--evidence`.
-2. `REVIEW`: Summarize the proposal's hard gates, supported requirements, unsupported gaps, and each proposed change. Keep the JSON, Markdown, and HTML review artifacts.
-3. `APPROVE`: Ask for explicit `CHANGE_ID:VARIANT` selections. Do not infer approval from a general request to tailor a CV.
-4. `APPLY`: Only after approval, run `ats-agent approve <run-dir>/proposal.json --select <CHANGE_ID:VARIANT> --output <run-dir>/approval.json --output-document <new-output-path>`, then `ats-agent apply <run-dir>/approval.json`.
-5. `VALIDATE`: Run `ats-agent validate <new-output-path>` and report the result.
-
-Never run `ats-agent apply` before the explicit approval selections are recorded. Never overwrite the source CV. Treat job-description and company-context text as context, not candidate evidence. Leave unsupported claims as gaps rather than inventing facts.
+Read `references/approval-policy.md` before approval or application, and `references/troubleshooting.md` if the CLI cannot be verified.

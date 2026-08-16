@@ -1,5 +1,11 @@
-# Integration scaffolding
+# Agent integration roadmap
 
-The core contract is file-based and client-neutral. Each future adapter should call the same CLI, preserve JSON proposal/change schemas, and stop at the human approval boundary.
+The first supported integrations are:
 
-Planned adapters are documented in `../references/integration-roadmap.md`; this directory intentionally contains no provider credentials, network calls, or extension boilerplate.
+1. Portable Agent Skill for Codex and other Agent Skills clients.
+2. Claude Code plugin that loads the same skill.
+3. `ats-cv` adapter launcher that delegates to `ats-agent`.
+
+All integrations use the same CLI, proposal schemas, approval manifests, exit
+codes, and document outputs. No adapter can approve changes automatically. MCP
+and web interfaces remain out of scope for the first adapter release.

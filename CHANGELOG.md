@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.0b2
+
+- Added portable Agent Skill for Codex and Claude Code plugin launchers.
+- Added explicit permission-gated CLI bootstrap and reproducible adapter bundles.
+- Added adapter CI and approval-boundary end-to-end tests.
+
 ## 1.0.0-beta.1 — pending protected release gate
 
 - Replaced hidden/encoded release payloads with one ordinary, reviewable source tree.
