@@ -33,6 +33,21 @@ def _equals(report: dict[str, Any], metric: str, expected: float) -> None:
         )
 
 
+def _print_requirement_mismatches(report: dict[str, Any]) -> None:
+    mismatches = [
+        {
+            "id": case["id"],
+            "unexpected": case.get("unexpected_requirements") or [],
+            "missing": case.get("missing_requirements") or [],
+        }
+        for case in report.get("cases", [])
+        if case.get("requirement_fp") or case.get("requirement_fn")
+    ]
+    if mismatches:
+        print("Benchmark v3 requirement mismatches:")
+        print(json.dumps(mismatches[:60], indent=2, sort_keys=True))
+
+
 def main() -> None:
     public = run_suite(
         "public",
@@ -50,6 +65,7 @@ def main() -> None:
         report_path=ROOT / "benchmarks/v3/reports/documents.json",
     )
 
+    _print_requirement_mismatches(public)
     _at_least(public, "requirement_extraction_precision", 0.94)
     _at_least(public, "requirement_extraction_recall", 0.94)
     _at_least(public, "evidence_matching_precision", 0.95)
