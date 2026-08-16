@@ -5,14 +5,16 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ats_agent.reports import render_html, render_markdown
+from ats_agent.review import render_html, render_markdown
 
 
 class ReviewReportTests(unittest.TestCase):
     def proposal(self) -> dict:
         return {
-            "schema_version": 3,
+            "schema_version": 5,
             "status": "draft",
+            "proposal_id": "P1",
+            "proposal_digest": "a" * 64,
             "candidate_id": "candidate-a",
             "source": "/tmp/resume.docx",
             "job_description": "/tmp/job.md",
@@ -48,6 +50,7 @@ class ReviewReportTests(unittest.TestCase):
                     "evidence_ids": [],
                 },
             ],
+            "hard_gates": [],
             "evidence_ledger": [
                 {
                     "id": "E1",
@@ -59,6 +62,7 @@ class ReviewReportTests(unittest.TestCase):
                     "line_number": 4,
                     "ownership": "contributor",
                     "confidence": "high",
+                    "verification_status": "candidate_supplied",
                 }
             ],
             "changes": [
@@ -68,6 +72,13 @@ class ReviewReportTests(unittest.TestCase):
                     "operation": "replace_span",
                     "expected_text": "Helped build Python workflows.",
                     "replacement_text": "Contributed to Python workflow automation.",
+                    "variants": [
+                        {
+                            "id": "balanced",
+                            "text": "Contributed to Python workflow automation.",
+                        }
+                    ],
+                    "default_variant": "balanced",
                     "evidence_ids": ["E1"],
                     "supported": True,
                     "reason": "Improve clarity while preserving ownership.",
@@ -153,7 +164,10 @@ class ReviewReportTests(unittest.TestCase):
             self.assertTrue(markdown_path.exists())
             self.assertTrue(html_path.exists())
             self.assertIn("C1", markdown_path.read_text(encoding="utf-8"))
-            self.assertIn("Download approval manifest", html_path.read_text(encoding="utf-8"))
+            self.assertIn(
+                "Download approval manifest",
+                html_path.read_text(encoding="utf-8"),
+            )
 
 
 if __name__ == "__main__":
