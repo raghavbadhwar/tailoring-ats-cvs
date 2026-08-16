@@ -3,7 +3,11 @@ from __future__ import annotations
 import unittest
 
 from ats_agent.evidence import EvidenceSource, build_evidence_ledger
-from ats_agent.requirements import evaluate_hard_gates, extract_requirements
+from ats_agent.requirements import (
+    evaluate_hard_gates,
+    extract_requirements,
+    map_requirements,
+)
 
 
 class RequirementEngineTests(unittest.TestCase):
@@ -142,6 +146,62 @@ class RequirementEngineTests(unittest.TestCase):
             self.gate_for(gates, "minimum_grade")["status"],
             "unmet",
         )
+
+    def test_ambiguous_aliases_do_not_satisfy_technical_requirements(self) -> None:
+        cases = (
+            (
+                "React is required.",
+                "EXPERIENCE\n- React quickly to operational incidents.\n",
+                "react",
+            ),
+            (
+                "Retrieval-augmented generation is required.",
+                "EXPERIENCE\n- Prepared a red-amber-green RAG status.\n",
+                "retrieval-augmented generation",
+            ),
+        )
+        for job_description, evidence, term in cases:
+            with self.subTest(term=term):
+                requirements = extract_requirements(job_description)
+                mappings = map_requirements(
+                    requirements,
+                    self.ledger(evidence),
+                )
+                mapping = next(
+                    item
+                    for item in mappings
+                    if term in item.get("normalized_terms", [])
+                )
+                self.assertEqual(mapping["coverage"], "unsupported")
+                self.assertEqual(mapping["evidence_ids"], [])
+
+    def test_unambiguous_react_and_rag_evidence_remains_supported(self) -> None:
+        cases = (
+            (
+                "React is required.",
+                "SKILLS\nReact.js\n",
+                "react",
+            ),
+            (
+                "Retrieval-augmented generation is required.",
+                "PROJECTS\n- Built a RAG pipeline for document retrieval.\n",
+                "retrieval-augmented generation",
+            ),
+        )
+        for job_description, evidence, term in cases:
+            with self.subTest(term=term):
+                requirements = extract_requirements(job_description)
+                mappings = map_requirements(
+                    requirements,
+                    self.ledger(evidence),
+                )
+                mapping = next(
+                    item
+                    for item in mappings
+                    if term in item.get("normalized_terms", [])
+                )
+                self.assertIn(mapping["coverage"], {"direct", "transferable"})
+                self.assertTrue(mapping["evidence_ids"])
 
 
 if __name__ == "__main__":

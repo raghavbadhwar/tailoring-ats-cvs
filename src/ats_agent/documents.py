@@ -15,6 +15,7 @@ REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
 W_NS_URI = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 XML_SPACE = "{http://www.w3.org/XML/1998/namespace}space"
 SUPPORTED_PRESERVE_PARTS = {None, "", "text", "word/document.xml"}
+ALLOWED_OUTPUT_SUFFIXES = {".txt", ".md", ".markdown", ".docx"}
 ElementTree.register_namespace("w", W_NS_URI)
 
 
@@ -357,15 +358,21 @@ def patch_document(
     output = output.expanduser().resolve()
     if output == source:
         raise ValueError("output must not overwrite the source")
-    if output.suffix.lower() == ".pdf":
+    output_suffix = output.suffix.lower()
+    if output_suffix == ".pdf":
         raise ValueError(
             "PDF output requires a genuine PDF renderer; choose DOCX or text output"
+        )
+    if output_suffix not in ALLOWED_OUTPUT_SUFFIXES:
+        raise ValueError(
+            "unsupported output format: "
+            f"{output_suffix or '<none>'}; choose TXT, Markdown, or DOCX"
         )
     output.parent.mkdir(parents=True, exist_ok=True)
     source_suffix = source.suffix.lower()
     if (
         source_suffix == ".docx"
-        and output.suffix.lower() == ".docx"
+        and output_suffix == ".docx"
         and mode == "preserve"
     ):
         with zipfile.ZipFile(source) as archive:
@@ -382,7 +389,7 @@ def patch_document(
 
     loaded = load(source)
     updated = _apply_text(loaded["body_text"], changes)
-    if output.suffix.lower() == ".docx":
+    if output_suffix == ".docx":
         write_ats_docx(output, updated)
     else:
         output.write_text(updated, encoding="utf-8")

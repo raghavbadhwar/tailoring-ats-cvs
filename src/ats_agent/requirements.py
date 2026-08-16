@@ -458,13 +458,56 @@ def _term_category(term: str) -> str:
     return "technical" if term in technical else "capability"
 
 
+def _ambiguous_alias_usage(
+    term: str,
+    alias: str,
+    evidence_text: str,
+) -> bool:
+    """Reject common-language uses of otherwise valid technical aliases."""
+
+    body = evidence_text.casefold()
+    normalized_alias = alias.casefold()
+    if term == "react" and normalized_alias == "react":
+        return (
+            re.search(
+                r"\breact(?:ed|ing|s)?\s+"
+                r"(?:quickly|rapidly|promptly|appropriately|to|when|under|"
+                r"against|on|after|before)\b",
+                body,
+            )
+            is not None
+        )
+    if (
+        term == "retrieval-augmented generation"
+        and normalized_alias == "rag"
+    ):
+        return (
+            re.search(r"\bred[- ]amber[- ]green\b", body) is not None
+            or re.search(
+                r"\brag\s+(?:status|rating|indicator|report|dashboard|"
+                r"colour|color|traffic[- ]light)\b",
+                body,
+            )
+            is not None
+        )
+    return False
+
+
+def _matches_alias(term: str, alias: str, evidence_text: str) -> bool:
+    return _contains_alias(evidence_text, alias) and not _ambiguous_alias_usage(
+        term,
+        alias,
+        evidence_text,
+    )
+
+
 def _direct_match(term: str, evidence_text: str) -> bool:
-    return _contains_alias(evidence_text, term)
+    return _matches_alias(term, term, evidence_text)
 
 
 def _alias_match(term: str, evidence_text: str) -> bool:
     return any(
-        _contains_alias(evidence_text, alias)
+        _matches_alias(term, alias, evidence_text)
         for alias in TERM_ALIASES.get(term, (term,))
     )
 

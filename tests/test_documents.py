@@ -85,6 +85,31 @@ class DocumentTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "PDF output"):
                 apply_manifest(manifest, [supported[0]["id"]])
 
+    def test_low_level_writer_rejects_non_contract_output_formats(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "resume.txt"
+            source.write_text(
+                "PROJECTS\n- Supported Python checks.\n",
+                encoding="utf-8",
+            )
+            change = {
+                "id": "C1",
+                "operation": "replace_span",
+                "expected_text": "Supported Python checks.",
+                "replacement_text": "Supported Python validation.",
+                "anchor": {},
+            }
+            for extension in (".rtf", ".html", ".bin"):
+                with self.subTest(extension=extension):
+                    output = root / f"tailored{extension}"
+                    with self.assertRaisesRegex(
+                        ValueError,
+                        "unsupported output format",
+                    ):
+                        patch_document(source, output, [change])
+                    self.assertFalse(output.exists())
+
     def test_apply_uses_variant_selection_and_rejects_stale_source(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
