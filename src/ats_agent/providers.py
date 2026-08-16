@@ -41,14 +41,20 @@ _GENERIC_PREFIXES = (
 
 
 def _safe_ownership_language(text: str) -> str:
+    """Improve weak openers without increasing the claimed ownership level."""
+
     rules = (
         (r"^Helped\s+build\b", "Contributed to building"),
+        (r"^Helped\s+configure\b", "Contributed to configuring"),
+        (r"^Helped\s+validate\b", "Contributed to validating"),
+        (r"^Supported\s+", "Contributed to supporting "),
+        (r"^Contributed\s+to\s+", "Supported work on "),
         (r"^Helped\b", "Contributed to"),
         (r"^Worked\s+on\b", "Contributed to"),
         (r"^Assisted\s+with\b", "Supported"),
         (r"^Assisted\b", "Supported"),
         (r"^Participated\s+in\b", "Contributed to"),
-        (r"^Collaborated\s+on\b", "Contributed to"),
+        (r"^Collaborated\s+on\b", "Contributed to work on"),
         (r"^Responsible\s+for\b", "Contributed to"),
     )
     for pattern, replacement in rules:
@@ -112,6 +118,8 @@ def _balanced_structure(text: str) -> str:
 
     if " for " in text:
         return text.replace(" for ", " to support ", 1)
+    if " using " in text:
+        return text.replace(" using ", " through ", 1)
     if ", with " in text:
         return text.replace(", with ", "; with ", 1)
     return text
@@ -156,7 +164,7 @@ class DeterministicRewriteProvider:
     """Offline provider using controlled, reviewable transformations only."""
 
     provider_id = "deterministic"
-    provider_version = "1.0.0"
+    provider_version = "1.0.1"
 
     def generate(self, context: RewriteContext) -> list[dict]:
         conservative = _safe_ownership_language(
