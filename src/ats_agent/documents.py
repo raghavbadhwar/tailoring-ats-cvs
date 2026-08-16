@@ -381,4 +381,8 @@ def patch_document(
         return
 
     loaded = load(source)
-    updated = _
+    updated = _apply_text(loaded["body_text"], changes)
+    if output.suffix.lower() == ".docx":
+        write_ats_docx(output, updated)
+    else:
+        output.write_text(updated, encoding="utf-8")
