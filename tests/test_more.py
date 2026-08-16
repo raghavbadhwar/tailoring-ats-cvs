@@ -20,8 +20,8 @@ from ats_agent.evidence import (
 )
 from ats_agent.formatting import audit_file, audit_text
 from ats_agent.ingestion import ExtractionError, load
-from ats_agent.reporting import proposal_html, proposal_markdown
 from ats_agent.requirements import extract_requirements, map_requirements
+from ats_agent.review import render_html, render_markdown
 from ats_agent.validation import validate_change, validate_changes
 from ats_agent.workflow import apply_manifest, build_proposal
 
@@ -267,7 +267,7 @@ class MoreTests(unittest.TestCase):
             self.assertEqual(result["supported_requirement_recall"], 1.0)
             self.assertEqual(result["unsafe_rewrite_count"], 0)
 
-    def test_reporting_handles_empty_sections(self):
+    def test_review_handles_empty_sections(self):
         proposal = {
             "candidate_id": "a",
             "status": "draft",
@@ -280,9 +280,16 @@ class MoreTests(unittest.TestCase):
         }
         self.assertIn(
             "No deterministic hard gate",
-            proposal_markdown(proposal),
+            render_markdown(proposal),
         )
-        self.assertIn("approval-manifest", proposal_html(proposal))
+        self.assertIn(
+            "approval-manifest",
+            render_html(
+                proposal,
+                proposal_filename="proposal.json",
+                default_output="tailored.docx",
+            ),
+        )
 
     def test_workflow_blocked_on_bad_input(self):
         with tempfile.TemporaryDirectory() as directory:
