@@ -1,10 +1,10 @@
-"""Traceable job-requirement extraction, matching, and hard-gate evaluation."""
+"""Traceable requirement extraction, matching, and hard-gate evaluation."""
 from __future__ import annotations
 
 import re
 from typing import Iterable
 
-from .evidence import EvidenceLedger
+from .evidence import EvidenceItem, EvidenceLedger
 
 TERM_ALIASES: dict[str, tuple[str, ...]] = {
     "python": ("python",),
@@ -21,6 +21,7 @@ TERM_ALIASES: dict[str, tuple[str, ...]] = {
     "tableau": ("tableau",),
     "git": ("git", "github", "version control"),
     "docker": ("docker", "containers", "containerization"),
+    "kubernetes": ("kubernetes", "k8s"),
     "aws": ("aws", "amazon web services"),
     "azure": ("azure", "microsoft azure"),
     "gcp": ("gcp", "google cloud platform"),
@@ -67,7 +68,11 @@ TERM_ALIASES: dict[str, tuple[str, ...]] = {
         "stakeholder communication",
         "cross-functional collaboration",
     ),
-    "market research": ("market research", "market analysis", "customer research"),
+    "market research": (
+        "market research",
+        "market analysis",
+        "customer research",
+    ),
     "market sizing": ("market sizing", "tam", "sam", "som"),
     "procurement": ("procurement", "tender", "tenders", "rfq", "sourcing"),
     "financial analysis": (
@@ -80,7 +85,13 @@ TERM_ALIASES: dict[str, tuple[str, ...]] = {
     "testing": ("testing", "tests", "test suite", "end-to-end", "e2e"),
 }
 
-PREFERRED_MARKERS = ("preferred", "nice to have", "desirable", "a plus", "advantage")
+PREFERRED_MARKERS = (
+    "preferred",
+    "nice to have",
+    "desirable",
+    "a plus",
+    "advantage",
+)
 MANDATORY_MARKERS = (
     "required",
     "must",
@@ -110,34 +121,68 @@ NUMBER_WORDS = {
 }
 NUMBER_PATTERN = "|".join(NUMBER_WORDS)
 
+EXPERIENCE_DURATION = re.compile(
+    rf"(?P<value>\d+(?:\.\d+)?|{NUMBER_PATTERN})\s*\+?\s*"
+    r"(?P<unit>years?|yrs?|months?|mos?)\b"
+    r"(?:\s+of)?(?:\s+(?:professional|relevant|work|industry|internship))?"
+    r"\s+experience",
+    re.IGNORECASE,
+)
+GRADE_PATTERN = re.compile(
+    r"\b(?:cgpa|gpa)\s*(?:of|:|=)?\s*(?P<value>\d+(?:\.\d+)?)"
+    r"(?:\s*/\s*(?P<scale>\d+(?:\.\d+)?))?",
+    re.IGNORECASE,
+)
+TRAVEL_PATTERNS = (
+    re.compile(
+        r"(?:travel|travelling|traveling)[^0-9]{0,24}(?P<value>\d{1,3})%",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?P<value>\d{1,3})%[^.!?;\n]{0,24}"
+        r"(?:travel|travelling|traveling)",
+        re.IGNORECASE,
+    ),
+)
+
 
 def _segments(text: str) -> Iterable[tuple[str, int, int]]:
-    # Keep semicolon-connected eligibility conditions together while still
-    # treating bullets/newlines and sentence terminators as independent spans.
-    for match in re.finditer(r"[^.!?\n]+(?:[.!?]|$)", text):
-        segment = match.group(0).strip(" \t-*•")
-        if segment:
-            yield segment, match.start(), match.end()
+    """Yield sentence, bullet, and semicolon clauses with local spans."""
+
+    for match in re.finditer(r"[^.!?;\n]+(?:[.!?;]|$)", text):
+        raw = match.group(0)
+        left_trimmed = raw.lstrip(" \t-*•")
+        leading = len(raw) - len(left_trimmed)
+        segment = left_trimmed.strip(" \t;*")
+        if not segment:
+            continue
+        start = match.start() + leading
+        yield segment, start, start + len(segment)
 
 
 def _importance(segment: str) -> str:
     body = segment.lower()
-    if any(marker in body for marker in PREFERRED_MARKERS):
-        return "preferred"
     if any(marker in body for marker in MANDATORY_MARKERS):
         return "mandatory"
+    if any(marker in body for marker in PREFERRED_MARKERS):
+        return "preferred"
     return "preferred"
 
 
 def _contains_alias(text: str, alias: str) -> bool:
-    return re.search(
-        rf"(?<![a-z0-9]){re.escape(alias.lower())}(?![a-z0-9])",
-        text.lower(),
-    ) is not None
+    return (
+        re.search(
+            rf"(?<![a-z0-9]){re.escape(alias.lower())}(?![a-z0-9])",
+            text.lower(),
+        )
+        is not None
+    )
 
 
-def _parse_number(value: str) -> int:
-    return int(value) if value.isdigit() else NUMBER_WORDS[value.lower()]
+def _parse_number(value: str) -> float:
+    return float(value) if value.replace(".", "", 1).isdigit() else float(
+        NUMBER_WORDS[value.lower()]
+    )
 
 
 def _record(
@@ -164,6 +209,25 @@ def _record(
     }
 
 
+def _travel_percentage(text: str) -> int | None:
+    for pattern in TRAVEL_PATTERNS:
+        match = pattern.search(text)
+        if match:
+            return int(match.group("value"))
+    return None
+
+
+def _work_mode(text: str) -> str | None:
+    body = text.lower()
+    if re.search(r"\b(?:on[- ]site|in[- ]office)\b", body):
+        return "on-site"
+    if re.search(r"\bhybrid\b", body):
+        return "hybrid"
+    if re.search(r"\bremote\b", body):
+        return "remote"
+    return None
+
+
 def extract_requirements(job_description: str) -> list[dict]:
     requirements: list[dict] = []
     seen: set[tuple[str, tuple[str, ...], int]] = set()
@@ -171,16 +235,18 @@ def extract_requirements(job_description: str) -> list[dict]:
         body = segment.lower()
         importance = _importance(segment)
 
-        years = re.search(
-            rf"(?:minimum\s+of\s+|at\s+least\s+|need(?:s)?\s+)?"
-            rf"(?P<years>\d+|{NUMBER_PATTERN})\s*\+?\s*(?:years?|yrs?)"
-            rf"(?:\s+of)?(?:\s+(?:professional|relevant|work|industry|internship))?\s+experience",
-            body,
-        ) or re.search(
-            rf"(?P<years>\d+|{NUMBER_PATTERN})\s*\+?\s*(?:years?|yrs?)",
+        years = EXPERIENCE_DURATION.search(body) or re.search(
+            rf"(?P<years>\d+|{NUMBER_PATTERN})\s*\+?\s*"
+            r"(?:years?|yrs?)\b",
             body,
         )
-        if years:
+        if years and (
+            "experience" in body
+            or any(marker in body for marker in MANDATORY_MARKERS)
+        ):
+            raw_years = years.groupdict().get("value") or years.groupdict().get(
+                "years"
+            )
             requirements.append(
                 _record(
                     kind="experience_years",
@@ -190,11 +256,14 @@ def extract_requirements(job_description: str) -> list[dict]:
                     importance=importance,
                     start=start,
                     end=end,
-                    minimum_years=_parse_number(years.group("years")),
+                    minimum_years=_parse_number(str(raw_years)),
                 )
             )
 
-        if re.search(r"authori[sz]ed to work|work authori[sz]ation|right to work", body):
+        if re.search(
+            r"authori[sz]ed to work|work authori[sz]ation|right to work",
+            body,
+        ):
             requirements.append(
                 _record(
                     kind="work_authorization",
@@ -209,8 +278,8 @@ def extract_requirements(job_description: str) -> list[dict]:
             )
 
         if re.search(
-            r"no sponsorship|sponsorship (?:is )?(?:not available|unavailable)|"
-            r"will not sponsor|cannot sponsor",
+            r"no sponsorship|sponsorship (?:is )?"
+            r"(?:not available|unavailable)|will not sponsor|cannot sponsor",
             body,
         ):
             requirements.append(
@@ -262,8 +331,9 @@ def extract_requirements(job_description: str) -> list[dict]:
                 )
             )
 
-        cgpa = re.search(r"(?:cgpa|gpa)[^0-9]{0,10}(\d+(?:\.\d+)?)", body)
-        if cgpa:
+        grade = GRADE_PATTERN.search(body)
+        if grade:
+            scale = grade.group("scale")
             requirements.append(
                 _record(
                     kind="minimum_grade",
@@ -273,19 +343,13 @@ def extract_requirements(job_description: str) -> list[dict]:
                     importance=importance,
                     start=start,
                     end=end,
-                    minimum=float(cgpa.group(1)),
+                    minimum=float(grade.group("value")),
+                    scale=float(scale) if scale else None,
                 )
             )
 
-        if re.search(r"\b(on[- ]site|in[- ]office|hybrid|remote)\b", body):
-            mode = next(
-                value
-                for value in ("on-site", "hybrid", "remote")
-                if (
-                    value in body
-                    or (value == "on-site" and re.search(r"on[- ]site|in[- ]office", body))
-                )
-            )
+        mode = _work_mode(segment)
+        if mode:
             requirements.append(
                 _record(
                     kind="work_mode",
@@ -299,11 +363,10 @@ def extract_requirements(job_description: str) -> list[dict]:
                 )
             )
 
-        travel = (
-            re.search(r"(?:travel|travelling|traveling)[^0-9]{0,15}(\d{1,3})%", body)
-            or re.search(r"(\d{1,3})%[^.!?]{0,15}(?:travel|travelling|traveling)", body)
-        )
-        if travel:
+        travel = _travel_percentage(segment)
+        if travel is not None:
+            if not 0 <= travel <= 100:
+                raise ValueError("travel percentage must be between 0 and 100")
             requirements.append(
                 _record(
                     kind="travel",
@@ -313,7 +376,7 @@ def extract_requirements(job_description: str) -> list[dict]:
                     importance=importance,
                     start=start,
                     end=end,
-                    percentage=int(travel.group(1)),
+                    percentage=travel,
                 )
             )
 
@@ -341,24 +404,55 @@ def extract_requirements(job_description: str) -> list[dict]:
 
 
 def _extract_country(segment: str) -> str | None:
-    match = re.search(r"(?:work|right to work)\s+in\s+([A-Z][A-Za-z .-]{2,30})", segment)
-    return match.group(1).strip(" .") if match else None
+    match = re.search(
+        r"(?:authori[sz]ed to work|right to work|work authori[sz]ation)"
+        r"(?:\s+in)?\s+"
+        r"(?P<country>[A-Z][A-Za-z.-]*(?:\s+[A-Z][A-Za-z.-]*){0,3})",
+        segment,
+    )
+    return match.group("country").strip(" .") if match else None
 
 
 def _normalize_degree(value: str) -> str:
     compact = re.sub(r"[.\s]", "", value.lower())
-    if compact.startswith("bachelor") or compact in {"btech", "bcom", "bsc", "ba"}:
+    if compact.startswith("bachelor") or compact in {
+        "btech",
+        "bcom",
+        "bsc",
+        "ba",
+    }:
         return "bachelor"
-    if compact.startswith("master") or compact in {"mba", "mcom", "msc", "ma"}:
+    if compact.startswith("master") or compact in {
+        "mba",
+        "mcom",
+        "msc",
+        "ma",
+    }:
         return "master"
     return compact
 
 
 def _term_category(term: str) -> str:
     technical = {
-        "python", "typescript", "javascript", "sql", "react", "next.js",
-        "postgres", "supabase", "api", "excel", "power bi", "tableau",
-        "git", "docker", "aws", "azure", "gcp", "testing",
+        "python",
+        "typescript",
+        "javascript",
+        "sql",
+        "react",
+        "next.js",
+        "postgres",
+        "supabase",
+        "api",
+        "excel",
+        "power bi",
+        "tableau",
+        "git",
+        "docker",
+        "kubernetes",
+        "aws",
+        "azure",
+        "gcp",
+        "testing",
         "retrieval-augmented generation",
     }
     return "technical" if term in technical else "capability"
@@ -369,17 +463,44 @@ def _direct_match(term: str, evidence_text: str) -> bool:
 
 
 def _alias_match(term: str, evidence_text: str) -> bool:
-    return any(_contains_alias(evidence_text, alias) for alias in TERM_ALIASES.get(term, (term,)))
+    return any(
+        _contains_alias(evidence_text, alias)
+        for alias in TERM_ALIASES.get(term, (term,))
+    )
 
 
 def _token_similarity(left: str, right: str) -> float:
-    stop = {"the", "and", "for", "with", "from", "into", "experience", "required"}
-    a = {token for token in re.findall(r"[a-z0-9+#.]+", left.lower()) if token not in stop}
-    b = {token for token in re.findall(r"[a-z0-9+#.]+", right.lower()) if token not in stop}
-    return len(a & b) / len(a | b) if a and b else 0.0
+    stop = {
+        "the",
+        "and",
+        "for",
+        "with",
+        "from",
+        "into",
+        "experience",
+        "required",
+    }
+    left_tokens = {
+        token
+        for token in re.findall(r"[a-z0-9+#.]+", left.lower())
+        if token not in stop
+    }
+    right_tokens = {
+        token
+        for token in re.findall(r"[a-z0-9+#.]+", right.lower())
+        if token not in stop
+    }
+    return (
+        len(left_tokens & right_tokens) / len(left_tokens | right_tokens)
+        if left_tokens and right_tokens
+        else 0.0
+    )
 
 
-def map_requirements(requirements: Iterable[dict], ledger: EvidenceLedger) -> list[dict]:
+def map_requirements(
+    requirements: Iterable[dict],
+    ledger: EvidenceLedger,
+) -> list[dict]:
     mappings: list[dict] = []
     for requirement in requirements:
         terms = list(requirement.get("normalized_terms", []))
@@ -391,7 +512,7 @@ def map_requirements(requirements: Iterable[dict], ledger: EvidenceLedger) -> li
             elif any(_alias_match(term, item.text) for term in terms):
                 transferable.append((0.9, item.id))
             else:
-                score = max((_token_similarity(requirement["text"], item.text),), default=0.0)
+                score = _token_similarity(requirement["text"], item.text)
                 if score >= 0.45:
                     transferable.append((score, item.id))
         if direct:
@@ -400,7 +521,10 @@ def map_requirements(requirements: Iterable[dict], ledger: EvidenceLedger) -> li
             confidence = "high"
         elif transferable:
             coverage = "transferable"
-            evidence_ids = [item_id for _, item_id in sorted(transferable, reverse=True)[:3]]
+            evidence_ids = [
+                item_id
+                for _, item_id in sorted(transferable, reverse=True)[:3]
+            ]
             confidence = "medium"
         else:
             coverage = "unsupported"
@@ -418,46 +542,270 @@ def map_requirements(requirements: Iterable[dict], ledger: EvidenceLedger) -> li
                 "explanation": (
                     "Exact candidate evidence contains the requirement terminology."
                     if coverage == "direct"
-                    else "Candidate evidence contains a recognized equivalent or closely related supported description."
-                    if coverage == "transferable"
-                    else "No candidate evidence supports this requirement."
+                    else (
+                        "Candidate evidence contains a recognized equivalent or "
+                        "closely related supported description."
+                        if coverage == "transferable"
+                        else "No candidate evidence supports this requirement."
+                    )
                 ),
             }
         )
     return mappings
 
 
-def evaluate_hard_gates(requirements: Iterable[dict], ledger: EvidenceLedger) -> list[dict]:
-    evidence_text = "\n".join(item.text for item in ledger.items)
-    years = [int(value) for value in re.findall(r"\b(\d+)\s*\+?\s*years?\b", evidence_text, re.I)]
-    candidate_years = max(years, default=None)
-    graduation_years = {int(value) for value in re.findall(r"\b(20\d{2})\b", evidence_text)}
-    degree_levels = set()
-    if re.search(r"\b(?:bachelor|b\.?\s*(?:tech|com|sc|a))\b", evidence_text, re.I):
-        degree_levels.add("bachelor")
-    if re.search(r"\b(?:master|m\.?\s*(?:ba|com|sc|a)|mba)\b", evidence_text, re.I):
-        degree_levels.add("master")
+def _experience_months(item: EvidenceItem) -> float | None:
+    match = EXPERIENCE_DURATION.search(item.text)
+    if not match:
+        if re.search(r"\bno\s+(?:professional\s+)?experience\b", item.text, re.I):
+            return 0.0
+        return None
+    value = _parse_number(match.group("value"))
+    unit = match.group("unit").lower()
+    return value * 12 if unit.startswith(("year", "yr")) else value
+
+
+def _graduation_years(item: EvidenceItem) -> set[int]:
+    body = item.text
+    if not (
+        "qualification" in item.fact_types
+        or re.search(
+            r"\b(?:expected|graduat(?:e|ing)|class of|degree|bachelor|master|"
+            r"b\.?com|b\.?tech|mba)\b",
+            body,
+            re.IGNORECASE,
+        )
+    ):
+        return set()
+    return {int(value) for value in re.findall(r"\b(20\d{2})\b", body)}
+
+
+def _candidate_modes(item: EvidenceItem) -> set[str]:
+    modes: set[str] = set()
+    body = item.text.lower()
+    if re.search(r"\b(?:on[- ]site|in[- ]office)\b", body):
+        modes.add("on-site")
+    if re.search(r"\bhybrid\b", body):
+        modes.add("hybrid")
+    if re.search(r"\bremote\b", body):
+        modes.add("remote")
+    return modes
+
+
+def _authorization_status(
+    requirement: dict,
+    ledger: EvidenceLedger,
+) -> tuple[str, list[str]]:
+    required_country = str(requirement.get("country") or "").casefold()
+    relevant: list[EvidenceItem] = []
+    for item in ledger.items:
+        if re.search(
+            r"authori[sz]ed to work|right to work|work authori[sz]ation",
+            item.text,
+            re.IGNORECASE,
+        ):
+            relevant.append(item)
+    if not relevant:
+        return "unknown", []
+    if any(
+        re.search(r"\bnot\s+authori[sz]ed to work\b", item.text, re.I)
+        for item in relevant
+    ):
+        return "unmet", [item.id for item in relevant]
+    if not required_country:
+        return "met", [item.id for item in relevant]
+    countries = {
+        country.casefold()
+        for item in relevant
+        if (country := _extract_country(item.text)) is not None
+    }
+    if required_country in countries:
+        return "met", [item.id for item in relevant]
+    return ("unmet" if countries else "unknown"), [item.id for item in relevant]
+
+
+def _sponsorship_status(ledger: EvidenceLedger) -> tuple[str, list[str]]:
+    no_need: list[EvidenceItem] = []
+    needs: list[EvidenceItem] = []
+    for item in ledger.items:
+        body = item.text.lower()
+        if re.search(
+            r"without (?:visa )?sponsorship|do(?:es)? not require "
+            r"(?:visa )?sponsorship|no (?:visa )?sponsorship required",
+            body,
+        ):
+            no_need.append(item)
+        elif re.search(
+            r"\brequire(?:s|d)? (?:visa )?sponsorship\b|"
+            r"\bneed(?:s|ed)? (?:visa )?sponsorship\b",
+            body,
+        ):
+            needs.append(item)
+    if no_need:
+        return "met", [item.id for item in no_need]
+    if needs:
+        return "unmet", [item.id for item in needs]
+    return "unknown", []
+
+
+def _work_mode_status(
+    required_mode: str,
+    ledger: EvidenceLedger,
+) -> tuple[str, list[str]]:
+    relevant = [
+        (item, _candidate_modes(item))
+        for item in ledger.items
+        if _candidate_modes(item)
+    ]
+    if not relevant:
+        return "unknown", []
+    modes = {mode for _, item_modes in relevant for mode in item_modes}
+    status = "met" if required_mode in modes else "unmet"
+    return status, [item.id for item, _ in relevant]
+
+
+def _travel_status(
+    required_percentage: int,
+    ledger: EvidenceLedger,
+) -> tuple[str, list[str]]:
+    relevant: list[tuple[EvidenceItem, int]] = []
+    for item in ledger.items:
+        if "travel" not in item.text.lower():
+            continue
+        percentage = _travel_percentage(item.text)
+        if percentage is not None and 0 <= percentage <= 100:
+            relevant.append((item, percentage))
+    if not relevant:
+        return "unknown", []
+    capacity = max(percentage for _, percentage in relevant)
+    status = "met" if capacity >= required_percentage else "unmet"
+    return status, [item.id for item, _ in relevant]
+
+
+def _grade_status(
+    minimum: float,
+    required_scale: float | None,
+    ledger: EvidenceLedger,
+) -> tuple[str, list[str]]:
+    grades: list[tuple[EvidenceItem, float, float | None]] = []
+    for item in ledger.items:
+        match = GRADE_PATTERN.search(item.text)
+        if match:
+            scale = match.group("scale")
+            grades.append(
+                (
+                    item,
+                    float(match.group("value")),
+                    float(scale) if scale else None,
+                )
+            )
+    if not grades:
+        return "unknown", []
+    comparable = [
+        (item, value)
+        for item, value, scale in grades
+        if required_scale is None or scale is None or scale == required_scale
+    ]
+    if not comparable:
+        return "unknown", [item.id for item, _, _ in grades]
+    highest = max(value for _, value in comparable)
+    status = "met" if highest >= minimum else "unmet"
+    return status, [item.id for item, _ in comparable]
+
+
+def evaluate_hard_gates(
+    requirements: Iterable[dict],
+    ledger: EvidenceLedger,
+) -> list[dict]:
+    degree_levels: set[str] = set()
+    for item in ledger.items:
+        if re.search(
+            r"\b(?:bachelor|b\.?\s*(?:tech|com|sc|a))\b",
+            item.text,
+            re.IGNORECASE,
+        ):
+            degree_levels.add("bachelor")
+        if re.search(
+            r"\b(?:master|m\.?\s*(?:ba|com|sc|a)|mba)\b",
+            item.text,
+            re.IGNORECASE,
+        ):
+            degree_levels.add("master")
 
     results: list[dict] = []
     for requirement in requirements:
-        if requirement.get("importance") != "mandatory" or requirement.get("kind") == "skill":
+        if (
+            requirement.get("importance") != "mandatory"
+            or requirement.get("kind") == "skill"
+        ):
             continue
         kind = requirement["kind"]
         status = "unknown"
         evidence_ids: list[str] = []
+
         if kind == "experience_years":
-            minimum = int(requirement["minimum_years"])
-            status = "met" if candidate_years is not None and candidate_years >= minimum else "unmet" if candidate_years is not None else "unknown"
-            evidence_ids = [item.id for item in ledger.items if re.search(r"\b\d+\s*\+?\s*years?\b", item.text, re.I)]
+            durations = [
+                (item, months)
+                for item in ledger.items
+                if (months := _experience_months(item)) is not None
+            ]
+            if durations:
+                candidate_months = max(months for _, months in durations)
+                required_months = float(requirement["minimum_years"]) * 12
+                status = (
+                    "met" if candidate_months >= required_months else "unmet"
+                )
+                evidence_ids = [item.id for item, _ in durations]
         elif kind == "graduation_year":
-            status = "met" if int(requirement["year"]) in graduation_years else "unmet" if graduation_years else "unknown"
-            evidence_ids = [item.id for item in ledger.items if str(requirement["year"]) in item.text]
+            graduation_evidence = [
+                (item, _graduation_years(item))
+                for item in ledger.items
+                if _graduation_years(item)
+            ]
+            years = {
+                year
+                for _, item_years in graduation_evidence
+                for year in item_years
+            }
+            if years:
+                status = (
+                    "met" if int(requirement["year"]) in years else "unmet"
+                )
+                evidence_ids = [item.id for item, _ in graduation_evidence]
         elif kind == "degree":
             required = requirement["normalized_terms"][0]
-            status = "met" if required in degree_levels else "unmet" if degree_levels else "unknown"
-            evidence_ids = [item.id for item in ledger.items if "qualification" in item.fact_types]
-        elif kind in {"work_authorization", "sponsorship", "work_mode", "travel", "minimum_grade"}:
-            status = "unknown"
+            if degree_levels:
+                status = "met" if required in degree_levels else "unmet"
+                evidence_ids = [
+                    item.id
+                    for item in ledger.items
+                    if "qualification" in item.fact_types
+                ]
+        elif kind == "work_authorization":
+            status, evidence_ids = _authorization_status(requirement, ledger)
+        elif kind == "sponsorship":
+            status, evidence_ids = _sponsorship_status(ledger)
+        elif kind == "work_mode":
+            status, evidence_ids = _work_mode_status(
+                str(requirement["value"]),
+                ledger,
+            )
+        elif kind == "travel":
+            status, evidence_ids = _travel_status(
+                int(requirement["percentage"]),
+                ledger,
+            )
+        elif kind == "minimum_grade":
+            status, evidence_ids = _grade_status(
+                float(requirement["minimum"]),
+                (
+                    float(requirement["scale"])
+                    if requirement.get("scale") is not None
+                    else None
+                ),
+                ledger,
+            )
+
         results.append(
             {
                 "requirement_id": requirement["id"],
