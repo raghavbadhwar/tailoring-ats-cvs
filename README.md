@@ -4,7 +4,7 @@ An approval-first tool that reads a candidate CV, a job description, and optiona
 
 ## Public job-list research
 
-Use a JSON list of public HTTPS job URLs to produce one draft proposal per role. Scrapling captures the listed job page and optional official company-context pages without credentials, redirects, proxies, or browser automation. The batch output includes a keyword-coverage map showing which job terms are directly supported, transferable, or unsupported by the candidate evidence. Unsupported keywords are reported as gaps and are never inserted into the CV.
+Use a JSON list of public HTTPS job URLs—or Career-Ops' `data/pipeline.md`—to produce one draft proposal per pending role. Scrapling captures the listed job page and optional official company-context pages without credentials, redirects, proxies, or browser automation. The batch output includes a keyword-coverage map showing which job terms are directly supported, transferable, or unsupported by the candidate evidence. Unsupported keywords are reported as gaps and are never inserted into the CV.
 
 ```json
 {"jobs": [{"id": "analyst", "job_url": "https://careers.example.com/analyst", "context_urls": ["https://example.com/careers"]}]}
@@ -13,6 +13,15 @@ Use a JSON list of public HTTPS job URLs to produce one draft proposal per role.
 ```bash
 ats-agent research-jobs resume.pdf jobs.json --candidate-id student --out runs/analyst-batch
 ```
+
+Career-Ops handoff (read-only; processed rows and tracker data are not changed):
+
+```bash
+ats-agent research-jobs /path/to/career-ops/cv.md /path/to/career-ops/data/pipeline.md \
+  --candidate-id student --out runs/career-ops-batch
+```
+
+Pending rows use Career-Ops' existing `- [ ] URL | Company | Role` format. Career-Ops remains the system for job discovery, ranking, liveness checks, and application tracking; `ats-agent` remains the approval-gated CV engine.
 
 It does **not** invent qualifications, autonomously submit applications, or claim a universal ATS score, interview probability, or employer-acceptance probability.
 

@@ -303,7 +303,7 @@ def main(argv: list[str] | None = None) -> int:
 
     research = sub.add_parser(
         "research-jobs",
-        help="capture public job pages and prepare one proposal per job",
+        help="research a JSON or Career-Ops Markdown list of public jobs",
     )
     research.add_argument("resume", type=_existing)
     research.add_argument("job_list", type=_existing)

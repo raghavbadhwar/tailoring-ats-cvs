@@ -33,11 +33,24 @@ def _public_url(value: object) -> str:
 
 
 def _job_list(path: Path) -> list[dict[str, object]]:
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError("job list must be valid JSON") from exc
-    jobs = raw.get("jobs") if isinstance(raw, dict) else raw
+    text = path.read_text(encoding="utf-8")
+    if path.suffix.lower() in {".md", ".markdown"}:
+        jobs: object = [
+            {
+                "job_url": parts[0],
+                **({"company": parts[1]} if len(parts) > 1 and parts[1] else {}),
+                **({"role": parts[2]} if len(parts) > 2 and parts[2] else {}),
+            }
+            for line in text.splitlines()
+            if line.strip().startswith("- [ ] ")
+            for parts in [[part.strip() for part in line.strip()[6:].split("|")]]
+        ]
+    else:
+        try:
+            raw = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ValueError("job list must be valid JSON or Career-Ops Markdown") from exc
+        jobs = raw.get("jobs") if isinstance(raw, dict) else raw
     if not isinstance(jobs, list) or not jobs or len(jobs) > MAX_JOBS:
         raise ValueError(f"job list must contain between 1 and {MAX_JOBS} jobs")
     normalized: list[dict[str, object]] = []
@@ -56,6 +69,11 @@ def _job_list(path: Path) -> list[dict[str, object]]:
                 "id": job_id,
                 "job_url": _public_url(item.get("job_url")),
                 "context_urls": [_public_url(url) for url in context_urls],
+                **{
+                    key: value.strip()
+                    for key in ("company", "role")
+                    if isinstance((value := item.get(key)), str) and value.strip()
+                },
             }
         )
         ids.add(job_id)
@@ -140,6 +158,9 @@ def research_jobs(
     results: list[dict[str, object]] = []
     for job in jobs:
         job_id = str(job["id"])
+        identity: dict[str, object] = {
+            key: job[key] for key in ("company", "role") if key in job
+        }
         job_dir = out / "jobs" / job_id
         job_dir.mkdir(parents=True)
         try:
@@ -180,6 +201,7 @@ def research_jobs(
             results.append(
                 {
                     "id": job_id,
+                    **identity,
                     "status": "draft",
                     "job_url": job["job_url"],
                     "proposal": artifacts["proposal"],
@@ -189,7 +211,9 @@ def research_jobs(
                 }
             )
         except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
-            results.append({"id": job_id, "status": "blocked", "reason": str(exc)})
+            results.append(
+                {"id": job_id, **identity, "status": "blocked", "reason": str(exc)}
+            )
     payload = {"status": "draft", "job_count": len(results), "jobs": results}
     (out / "manifest.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return {**payload, "manifest": str(out / "manifest.json")}

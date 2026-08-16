@@ -70,12 +70,39 @@ class JobResearchTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "public IP"):
                 research_jobs(resume, jobs, root / "run")
 
+    def test_career_ops_pipeline_reads_pending_jobs_and_ignores_processed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            resume, jobs = root / "cv.md", root / "pipeline.md"
+            resume.write_text("SKILLS\nPython, SQL\n", encoding="utf-8")
+            jobs.write_text(
+                """# Pipeline
+
+## Pending
+- [ ] https://jobs.example.com/analyst | Example Co | Data Analyst
+- [ ] https://jobs.example.com/consultant
+
+## Processed
+- [x] https://jobs.example.com/old | Old Co | Old Role
+""",
+                encoding="utf-8",
+            )
+            with patch("ats_agent.job_research.socket.getaddrinfo", self._resolver), patch(
+                "ats_agent.job_research.shutil.which", return_value="/usr/bin/scrapling"
+            ), patch("ats_agent.job_research.subprocess.run", side_effect=self._scrapling):
+                result = research_jobs(resume, jobs, root / "run")
+
+            self.assertEqual(result["job_count"], 2)
+            self.assertEqual(result["jobs"][0]["company"], "Example Co")
+            self.assertEqual(result["jobs"][0]["role"], "Data Analyst")
+            self.assertNotIn("Old Co", (root / "run" / "manifest.json").read_text())
+
     def test_invalid_job_lists_and_unavailable_scrapling_are_safe_failures(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             jobs = root / "jobs.json"
             for payload, message in (
-                ("{", "valid JSON"),
+                ("{", "valid JSON or Career-Ops Markdown"),
                 ("[]", "between 1"),
                 ("[1]", "must be an object"),
                 ('[{"job_url": "http://example.com"}]', "public HTTPS"),
