@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tailoring-ats-cvs"
-version = "0.9.0"
+version = "1.0.0b1"
 description = "Approval-first, evidence-grounded career intelligence and CV tailoring"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -23,8 +23,10 @@ dependencies = [
 [project.optional-dependencies]
 documents = ["pypdf>=4.0"]
 dev = [
+  "bandit>=1.8",
   "build>=1.2",
   "coverage>=7.6",
+  "cyclonedx-bom>=6.0",
   "mypy>=1.10",
   "pip-audit>=2.7",
   "ruff>=0.6",
@@ -57,5 +59,5 @@ source = ["ats_agent"]
 branch = true
 
 [tool.coverage.report]
-fail_under = 80
+fail_under = 90
 show_missing = true
