@@ -32,10 +32,43 @@ jobs:
         run: ruff check src tests scripts
       - name: Type check
         run: mypy src/ats_agent
-      - name: Test and benchmark with branch coverage
+      - name: Test, benchmark, and CLI workflow with branch coverage
+        shell: bash
         run: |
           coverage run --source=ats_agent -m unittest discover -s tests -v
           coverage run --append --source=ats_agent scripts/check_benchmark.py
+          run_dir="$(mktemp -d)"
+          coverage run --append --source=ats_agent -m ats_agent.cli doctor > /dev/null
+          coverage run --append --source=ats_agent -m ats_agent.cli format examples/sample_resume.txt > /dev/null
+          coverage run --append --source=ats_agent -m ats_agent.cli propose \
+            examples/sample_resume.txt examples/sample_job.md \
+            --evidence examples/sample_project_bank.md \
+            --candidate-id coverage-candidate \
+            --output "$run_dir/proposal.json" > /dev/null
+          coverage run --append --source=ats_agent -m ats_agent.cli review \
+            "$run_dir/proposal.json" \
+            --markdown "$run_dir/review.md" \
+            --html "$run_dir/review.html" \
+            --output-document tailored-resume.txt > /dev/null
+          selection="$(python - "$run_dir/proposal.json" <<'PY'
+          import json
+          import sys
+          proposal = json.load(open(sys.argv[1], encoding="utf-8"))
+          change = next(item for item in proposal["changes"] if item.get("supported"))
+          print(f"{change['id']}:{change.get('default_variant') or change['variants'][0]['id']}")
+          PY
+          )"
+          coverage run --append --source=ats_agent -m ats_agent.cli approve \
+            "$run_dir/proposal.json" \
+            --select "$selection" \
+            --output "$run_dir/approval.json" \
+            --output-document tailored-resume.txt > /dev/null
+          coverage run --append --source=ats_agent -m ats_agent.cli apply \
+            "$run_dir/approval.json" > /dev/null
+          coverage run --append --source=ats_agent -m ats_agent.cli validate \
+            "$run_dir/tailored-resume.txt" > /dev/null
+          coverage run --append --source=ats_agent -m ats_agent.cli benchmark \
+            --suite smoke --report "$run_dir/smoke.json" > /dev/null
           coverage report --show-missing --fail-under=90
       - name: Audit Python dependencies
         run: pip-audit --local
@@ -60,6 +93,7 @@ jobs:
           assert result["schema_version"] == 3
           PY
       - name: Run approval-gated example end to end
+        shell: bash
         run: |
           run_dir="$(mktemp -d)"
           ats-agent propose \
@@ -75,24 +109,22 @@ jobs:
           test -s "$run_dir/review.md"
           test -s "$run_dir/review.html"
           grep -q "Requirement-to-Evidence Matrix" "$run_dir/review.md"
-          ats-agent approve "$run_dir/proposal.json" \
-            --select "$(python - "$run_dir/proposal.json" <<'PY'
+          selection="$(python - "$run_dir/proposal.json" <<'PY'
           import json
           import sys
           proposal = json.load(open(sys.argv[1], encoding="utf-8"))
           change = next(item for item in proposal["changes"] if item.get("supported"))
           print(f"{change['id']}:{change.get('default_variant') or change['variants'][0]['id']}")
           PY
-          )" \
+          )"
+          ats-agent approve "$run_dir/proposal.json" \
+            --select "$selection" \
             --output "$run_dir/approved_changes.json" \
             --output-document tailored-resume.txt
-          (
-            cd "$run_dir"
-            ats-agent apply approved_changes.json > apply-result.json
-            test -f tailored-resume.txt
-            test -f tailored-resume.txt.applied.json
-            grep -qi "workflow automation" tailored-resume.txt
-          )
+          ats-agent apply "$run_dir/approved_changes.json" > "$run_dir/apply-result.json"
+          test -f "$run_dir/tailored-resume.txt"
+          test -f "$run_dir/tailored-resume.txt.applied.json"
+          grep -qi "workflow automation" "$run_dir/tailored-resume.txt"
           grep -q "Helped build automated order workflows" examples/sample_resume.txt
 
   compatibility:
