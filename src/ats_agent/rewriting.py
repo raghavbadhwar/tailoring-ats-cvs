@@ -30,9 +30,14 @@ _SECTION_HEADINGS: dict[str, tuple[str, ...]] = {
 
 
 def _matches_by_evidence(matches: Iterable[dict]) -> dict[str, list[dict]]:
+    """Index only skill/capability matches that are safe to phrase-optimize."""
+
     index: dict[str, list[dict]] = {}
     for match in matches:
-        if match.get("coverage") not in {"direct", "transferable"}:
+        if (
+            match.get("kind") != "skill"
+            or match.get("coverage") not in {"direct", "transferable"}
+        ):
             continue
         for evidence_id in match.get("evidence_ids", []):
             index.setdefault(evidence_id, []).append(match)
@@ -198,6 +203,8 @@ def propose_supported_changes(
             for match in match_index.get(item.id, [])
             for term in match.get("normalized_terms", [])
         ]
+        if not terms:
+            continue
         section = _target_section(cv, item)
         variants, provider_id, provider_version, fallback_reason = _variants_for(
             selected_provider,
@@ -237,7 +244,10 @@ def propose_supported_changes(
     resume_ids = {item.id for item in ledger.items if item.source == "resume"}
     surfaced_ids: set[str] = set()
     for match in matches:
-        if match.get("coverage") not in {"direct", "transferable"}:
+        if (
+            match.get("kind") != "skill"
+            or match.get("coverage") not in {"direct", "transferable"}
+        ):
             continue
         supporting_ids = [
             evidence_id
