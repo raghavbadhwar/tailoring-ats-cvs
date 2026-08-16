@@ -15,6 +15,7 @@ from ._benchmark_validate import (
 
 def _evaluate_standard_case(case: dict[str, Any]) -> dict[str, Any]:
     from .evidence import EvidenceSource, build_evidence_ledger
+    from .providers import DeterministicRewriteProvider, RewriteContext
     from .requirements import (
         evaluate_hard_gates,
         extract_requirements,
@@ -110,7 +111,9 @@ def _evaluate_standard_case(case: dict[str, Any]) -> dict[str, Any]:
     match_fn = len(expected_supported - predicted_supported)
 
     expected_unsupported = {
-        term for term, status in expected_matches.items() if status == "unsupported"
+        term
+        for term, status in expected_matches.items()
+        if status == "unsupported"
     }
     predicted_unsupported = {
         term
@@ -157,6 +160,7 @@ def _evaluate_standard_case(case: dict[str, Any]) -> dict[str, Any]:
     variant_distinct = 0
     section_hits = 0
     section_total = 0
+    variant_diagnostics: list[dict[str, Any]] = []
     supported_changes = [
         change for change in changes if change.get("supported")
     ]
@@ -164,15 +168,22 @@ def _evaluate_standard_case(case: dict[str, Any]) -> dict[str, Any]:
         str(term).casefold()
         for term in case.get("forbidden_rewrite_terms") or []
     }
+    provider = DeterministicRewriteProvider()
     for change in supported_changes:
         variants = list(change.get("variants") or [])
         variant_ids = {str(variant.get("id")) for variant in variants}
-        if {"conservative", "balanced", "compact"} <= variant_ids:
+        complete = {"conservative", "balanced", "compact"} <= variant_ids
+        if complete:
             variant_complete += 1
         normalized_variants = {
-            _normalized_text(variant.get("text") or "") for variant in variants
+            _normalized_text(variant.get("text") or "")
+            for variant in variants
         }
-        if len(normalized_variants) == len(variants) and len(variants) >= 3:
+        distinct = (
+            len(normalized_variants) == len(variants)
+            and len(variants) >= 3
+        )
+        if distinct:
             variant_distinct += 1
         if case.get("expected_section"):
             section_total += 1
@@ -193,6 +204,47 @@ def _evaluate_standard_case(case: dict[str, Any]) -> dict[str, Any]:
                 message = str(exc).casefold()
                 metric_binding_violations += "metric binding" in message
                 ownership_violations += "ownership escalation" in message
+
+        if not complete or not distinct:
+            expected_text = str(change.get("expected_text") or "")
+            context = RewriteContext(
+                original_text=expected_text,
+                terms=tuple(
+                    str(term)
+                    for term in change.get("terms_introduced") or []
+                ),
+                target_section=str(change.get("target_section") or "projects"),
+                max_characters=max(
+                    120,
+                    min(500, len(expected_text) * 2 + 40),
+                ),
+            )
+            raw_variants = provider.generate(context)
+            rejected: list[dict[str, str]] = []
+            for raw in raw_variants:
+                try:
+                    validate_change(
+                        {**change, "replacement_text": raw["text"]},
+                        ledger,
+                    )
+                except ValueError as exc:
+                    rejected.append(
+                        {
+                            "id": str(raw.get("id") or ""),
+                            "text": str(raw.get("text") or ""),
+                            "error": str(exc),
+                        }
+                    )
+            variant_diagnostics.append(
+                {
+                    "change_id": str(change.get("id") or ""),
+                    "expected_text": expected_text,
+                    "terms": list(change.get("terms_introduced") or []),
+                    "raw_variants": raw_variants,
+                    "accepted_variants": variants,
+                    "rejected_variants": rejected,
+                }
+            )
 
     return {
         "id": str(case["id"]),
@@ -225,6 +277,7 @@ def _evaluate_standard_case(case: dict[str, Any]) -> dict[str, Any]:
         "variant_complete": variant_complete,
         "variant_total": len(supported_changes),
         "variant_distinct": variant_distinct,
+        "variant_diagnostics": variant_diagnostics,
         "section_hits": section_hits,
         "section_total": section_total,
         "latency_ms": elapsed_ms,
