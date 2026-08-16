@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from ats_agent._benchmark_adversarial import _evaluate_adversarial_case
 from ats_agent.benchmark import (
     BenchmarkGateError,
     SUITE_FILENAMES,
@@ -61,6 +62,37 @@ class BenchmarkV3Tests(unittest.TestCase):
             {"docx", "pdf", "rtf", "html"}
             <= {case["format"] for case in documents}
         )
+
+    def test_integrity_attacks_do_not_depend_on_matcher_rewrite_output(self) -> None:
+        base = {
+            "resume": (
+                "PROJECTS\n"
+                "- Helped build automated alpha workflows with 42 tests.\n"
+            ),
+            "job_description": (
+                "Workflow automation is required for the alpha process."
+            ),
+        }
+        stale = _evaluate_adversarial_case(
+            {
+                "id": "stale",
+                "scenario": "stale_resume",
+                **base,
+                "mutation": "\nChanged after approval.",
+            }
+        )
+        tampered = _evaluate_adversarial_case(
+            {
+                "id": "tampered",
+                "scenario": "proposal_tampering",
+                **base,
+                "tampered_replacement": (
+                    "Led production systems for enterprise customers."
+                ),
+            }
+        )
+        self.assertTrue(stale["passed"], stale)
+        self.assertTrue(tampered["passed"], tampered)
 
     def test_report_contains_denominators_intervals_hashes_and_baselines(self) -> None:
         result = run_suite("smoke", root=ROOT)
