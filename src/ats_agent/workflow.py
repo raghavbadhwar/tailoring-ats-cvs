@@ -265,11 +265,11 @@ def _verify_artifacts(
         path = _resolve_from(proposal_parent, artifact.path)
         if path is None or not path.is_file():
             raise ValueError(
-                f"stale artifact: {artifact.kind} file is missing"
+                f"stale proposal: {artifact.kind} artifact file is missing"
             )
         if _sha(path) != artifact.sha256:
             raise ValueError(
-                f"stale artifact: {artifact.kind} hash no longer matches"
+                f"stale proposal: {artifact.kind} artifact hash no longer matches"
             )
         if artifact.kind in {"resume", "candidate_evidence"}:
             if artifact.candidate_id != proposal.candidate_id:
@@ -292,7 +292,11 @@ def apply_manifest(
     manifest_path = manifest_path.expanduser().resolve()
     raw_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     approval = ApprovalManifest.model_validate(raw_manifest)
-    manifest = approval.model_dump(mode="json", exclude_none=True)
+    manifest = approval.model_dump(
+        mode="json",
+        exclude_none=True,
+        exclude_unset=True,
+    )
 
     proposal_path = _resolve_from(
         manifest_path.parent,
