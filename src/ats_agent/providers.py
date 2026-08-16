@@ -41,10 +41,15 @@ _GENERIC_PREFIXES = (
 
 
 def _safe_ownership_language(text: str) -> str:
+    """Use an equivalent contribution verb without increasing ownership."""
+
     rules = (
         (r"^Helped\s+build\b", "Contributed to building"),
         (r"^Helped\b", "Contributed to"),
         (r"^Worked\s+on\b", "Contributed to"),
+        (r"^Supported\b", "Contributed to"),
+        (r"^Contributed\s+to\s+building\b", "Helped build"),
+        (r"^Contributed\s+to\b", "Supported"),
         (r"^Assisted\s+with\b", "Supported"),
         (r"^Assisted\b", "Supported"),
         (r"^Participated\s+in\b", "Contributed to"),
