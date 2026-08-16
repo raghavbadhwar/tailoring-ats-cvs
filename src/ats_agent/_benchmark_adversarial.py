@@ -12,32 +12,59 @@ from ._benchmark_validate import (
     _requirement_key,
 )
 
+_STABLE_APPROVAL_RESUME = (
+    "PROJECTS\n"
+    "- Helped build automated order workflows with 42 tests.\n"
+)
+_STABLE_APPROVAL_JOB = "Workflow automation experience is required."
+
 
 def _write_approval_fixture(
     root: Path,
     resume_text: str,
     job_text: str,
 ) -> tuple[Path, Path, dict[str, Any]]:
+    """Build an approval fixture without coupling integrity tests to matching."""
+
     from .review import build_approval_manifest
     from .workflow import build_proposal
 
     resume = root / "resume.txt"
     job = root / "job.txt"
-    resume.write_text(resume_text, encoding="utf-8")
-    job.write_text(job_text, encoding="utf-8")
-    proposal = build_proposal(
-        resume,
-        job,
-        candidate_id="benchmark-adversarial",
-    )
+
+    def build(current_resume: str, current_job: str) -> dict[str, Any]:
+        resume.write_text(current_resume, encoding="utf-8")
+        job.write_text(current_job, encoding="utf-8")
+        return build_proposal(
+            resume,
+            job,
+            candidate_id="benchmark-adversarial",
+        )
+
+    proposal = build(resume_text, job_text)
+    supported_changes = [
+        change
+        for change in proposal.get("changes", [])
+        if change.get("supported")
+    ]
+    if not supported_changes:
+        proposal = build(_STABLE_APPROVAL_RESUME, _STABLE_APPROVAL_JOB)
+        supported_changes = [
+            change
+            for change in proposal.get("changes", [])
+            if change.get("supported")
+        ]
+    if not supported_changes:
+        raise AssertionError(
+            "approval integrity fixture did not produce a supported change"
+        )
+
     proposal_path = root / "proposal.json"
     proposal_path.write_text(
         json.dumps(proposal, indent=2) + "\n",
         encoding="utf-8",
     )
-    supported = next(
-        change for change in proposal.get("changes", []) if change.get("supported")
-    )
+    supported = supported_changes[0]
     manifest = build_approval_manifest(
         proposal,
         proposal_filename=proposal_path.name,
