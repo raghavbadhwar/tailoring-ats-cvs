@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from ats_agent.reporting import proposal_html
-from ats_agent.reports import render_html
+from ats_agent.review import render_html
 
 
 class ReviewApprovalBindingTests(unittest.TestCase):
@@ -25,12 +24,17 @@ class ReviewApprovalBindingTests(unittest.TestCase):
         }
 
     def test_primary_review_manifest_is_schema_v2_and_digest_bound(self) -> None:
-        html = proposal_html(self.proposal())
+        html = render_html(
+            self.proposal(),
+            proposal_filename="proposal.json",
+            default_output="tailored.docx",
+            digest_reference="proposal",
+        )
         self.assertIn("schema_version:2", html)
         self.assertIn("proposal_digest:proposal.proposal_digest", html)
         self.assertIn("document_mode:'preserve'", html)
 
-    def test_compatible_review_manifest_is_schema_v2_and_digest_bound(self) -> None:
+    def test_constant_digest_review_manifest_is_schema_v2_and_bound(self) -> None:
         html = render_html(
             self.proposal(),
             proposal_filename="proposal.json",
