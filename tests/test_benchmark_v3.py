@@ -6,12 +6,14 @@ import unittest
 from pathlib import Path
 
 from ats_agent.benchmark import (
+    BenchmarkGateError,
     SUITE_FILENAMES,
     load_cases,
     run_suite,
     validate_cases,
     wilson_interval,
 )
+from ats_agent.cli import _error_exit_code, main as cli_main
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -131,6 +133,22 @@ class BenchmarkV3Tests(unittest.TestCase):
             report = Path(tmp) / "report.json"
             result = run_suite("smoke", root=ROOT, report_path=report)
             self.assertEqual(json.loads(report.read_text(encoding="utf-8")), result)
+
+    def test_cli_runs_named_suite_and_writes_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            report = Path(tmp) / "smoke.json"
+            code = cli_main(
+                ["benchmark", "--suite", "smoke", "--report", str(report)]
+            )
+            self.assertEqual(code, 0)
+            payload = json.loads(report.read_text(encoding="utf-8"))
+            self.assertEqual(payload["suite"], "smoke")
+
+    def test_benchmark_gate_failures_use_exit_code_seven(self) -> None:
+        self.assertEqual(
+            _error_exit_code(BenchmarkGateError("benchmark gate failed")),
+            7,
+        )
 
 
 if __name__ == "__main__":
