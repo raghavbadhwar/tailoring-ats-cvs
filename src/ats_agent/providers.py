@@ -107,6 +107,16 @@ def _surface_term(text: str, term: str) -> str:
     return text
 
 
+def _balanced_structure(text: str) -> str:
+    """Vary sentence structure without introducing a new factual claim."""
+
+    if " for " in text:
+        return text.replace(" for ", " to support ", 1)
+    if ", with " in text:
+        return text.replace(", with ", "; with ", 1)
+    return text
+
+
 def _compact(text: str) -> str:
     result = re.sub(
         r"\b(?:successfully|various|multiple|really|very)\b",
@@ -133,6 +143,12 @@ def _compact(text: str) -> str:
         count=1,
         flags=re.IGNORECASE,
     )
+    if ", with " in result:
+        head, _, _ = result.partition(", with ")
+        result = head.rstrip(" .") + "."
+    elif "; with " in result:
+        head, _, _ = result.partition("; with ")
+        result = head.rstrip(" .") + "."
     return re.sub(r"\s+", " ", result).strip()
 
 
@@ -149,6 +165,8 @@ class DeterministicRewriteProvider:
         balanced = conservative
         for term in dict.fromkeys(context.terms):
             balanced = _surface_term(balanced, term)
+        if balanced == conservative:
+            balanced = _balanced_structure(balanced)
         compact = _compact(balanced)
 
         variants: list[dict] = []
