@@ -71,7 +71,7 @@ class DocumentTests(unittest.TestCase):
             self.assertEqual(result["status"], "applied")
             self.assertTrue((root / "final.txt.applied.json").exists())
             source.write_text(source.read_text(encoding="utf-8") + "changed", encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "stale proposal"):
+            with self.assertRaisesRegex(ValueError, r"stale (?:proposal|artifact)"):
                 apply_manifest(manifest, [])
 
 
