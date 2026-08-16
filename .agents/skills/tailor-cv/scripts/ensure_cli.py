@@ -3,17 +3,29 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
 
-from packaging.version import InvalidVersion, Version
-
 DEFAULT_POLICY = Path(__file__).resolve().parents[1] / "assets" / "bootstrap-policy.json"
 EXIT_CODES = {"ready": 0, "bootstrap_required": 20, "upgrade_required": 21,
               "manual_install_required": 22, "install_failed": 23,
               "post_install_verification_failed": 24, "invalid_policy": 25}
+VERSION_PATTERN = re.compile(r"^(?P<release>\d+(?:\.\d+)*)(?:(?P<stage>a|b|rc)(?P<number>\d+))?$")
+
+
+def version_key(raw: str) -> tuple[tuple[int, ...], int, int]:
+    """Compare the stable/a/b/rc versions accepted by this pinned bootstrap policy."""
+    match = VERSION_PATTERN.fullmatch(raw)
+    if match is None:
+        raise ValueError(f"unsupported version: {raw}")
+    release = [int(part) for part in match.group("release").split(".")]
+    while len(release) > 1 and release[-1] == 0:
+        release.pop()
+    stage = {"a": 0, "b": 1, "rc": 2, None: 3}[match.group("stage")]
+    return tuple(release), stage, int(match.group("number") or 0)
 
 
 def load_policy(path: Path) -> dict[str, Any]:
@@ -26,7 +38,7 @@ def load_policy(path: Path) -> dict[str, Any]:
         raise ValueError("bootstrap policy missing fields: " + ", ".join(missing))
     if policy["schema_version"] != 1 or policy["requires_explicit_approval"] is not True:
         raise ValueError("unsupported or unsafe bootstrap policy")
-    Version(str(policy["minimum_version"]))
+    version_key(str(policy["minimum_version"]))
     return policy
 
 
@@ -56,16 +68,18 @@ def check_cli(policy_path: Path) -> dict[str, Any]:
                 "stderr": completed.stderr[-4000:]}
     try:
         payload = json.loads(completed.stdout)
-        installed, minimum = Version(str(payload["package"]["version"])), Version(str(policy["minimum_version"]))
-    except (KeyError, TypeError, json.JSONDecodeError, InvalidVersion) as exc:
+        installed = str(payload["package"]["version"])
+        minimum = str(policy["minimum_version"])
+        installed_key, minimum_key = version_key(installed), version_key(minimum)
+    except (KeyError, TypeError, json.JSONDecodeError, ValueError) as exc:
         return {"schema_version": 1, "status": "unhealthy", "reason": str(exc)}
-    if installed < minimum:
-        return {"schema_version": 1, "status": "upgrade_required", "version": str(installed),
-                "minimum_version": str(minimum), "requires_user_approval": True,
+    if installed_key < minimum_key:
+        return {"schema_version": 1, "status": "upgrade_required", "version": installed,
+                "minimum_version": minimum, "requires_user_approval": True,
                 "commands": installation_commands(policy)}
     if payload.get("strict_check", {}).get("status") != "passed":
         return {"schema_version": 1, "status": "unhealthy", "reason": "strict doctor check did not pass"}
-    return {"schema_version": 1, "status": "ready", "executable": executable, "version": str(installed)}
+    return {"schema_version": 1, "status": "ready", "executable": executable, "version": installed}
 
 
 def install_cli(policy_path: Path, manager: str) -> dict[str, Any]:
