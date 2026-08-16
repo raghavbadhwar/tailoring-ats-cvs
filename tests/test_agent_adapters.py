@@ -10,7 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CHECK_INSTALL = ROOT / ".agents/skills/tailor-cv/scripts/check-install.py"
-CLI = Path(sys.executable).with_name("ats-agent")
+CLI = Path(sys.executable).with_name("ats-agent.exe" if os.name == "nt" else "ats-agent")
 
 
 class AgentAdapterTests(unittest.TestCase):
