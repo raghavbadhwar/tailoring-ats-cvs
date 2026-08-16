@@ -19,7 +19,9 @@ class DocxPreserveTests(unittest.TestCase):
             output = root / "tailored.docx"
 
             document = Document()
-            document.sections[0].header.paragraphs[0].text = "candidate@example.com"
+            document.sections[0].header.paragraphs[0].text = (
+                "candidate@example.com"
+            )
             document.add_heading("SUMMARY", level=1)
             paragraph = document.add_paragraph(style="List Bullet")
             run = paragraph.add_run(
@@ -34,8 +36,16 @@ class DocxPreserveTests(unittest.TestCase):
                 "Workflow automation experience is required.",
                 encoding="utf-8",
             )
-            proposal = build_proposal(source, job, candidate_id="candidate-a")
-            supported = [change for change in proposal["changes"] if change["supported"]]
+            proposal = build_proposal(
+                source,
+                job,
+                candidate_id="candidate-a",
+            )
+            supported = [
+                change
+                for change in proposal["changes"]
+                if change["supported"]
+            ]
             self.assertEqual(len(supported), 1)
             proposal_path.write_text(json.dumps(proposal), encoding="utf-8")
 
@@ -43,7 +53,9 @@ class DocxPreserveTests(unittest.TestCase):
             manifest.write_text(
                 json.dumps(
                     {
+                        "schema_version": 2,
                         "proposal": str(proposal_path),
+                        "proposal_digest": proposal["proposal_digest"],
                         "approved_change_ids": [supported[0]["id"]],
                         "output": str(output),
                         "document_mode": "preserve",
@@ -57,7 +69,9 @@ class DocxPreserveTests(unittest.TestCase):
             self.assertEqual(result["document_mode"], "preserve")
             tailored = Document(output)
             tailored_paragraph = next(
-                item for item in tailored.paragraphs if "workflow automation" in item.text
+                item
+                for item in tailored.paragraphs
+                if "workflow automation" in item.text
             )
             self.assertEqual(tailored_paragraph.style.name, "List Bullet")
             self.assertTrue(tailored_paragraph.runs[0].bold)
@@ -74,7 +88,8 @@ class DocxPreserveTests(unittest.TestCase):
             source = root / "resume.txt"
             job = root / "job.md"
             source.write_text(
-                "PROJECTS\n- Helped build automated order workflows with 42 tests.\n",
+                "PROJECTS\n"
+                "- Helped build automated order workflows with 42 tests.\n",
                 encoding="utf-8",
             )
             job.write_text(
@@ -82,14 +97,20 @@ class DocxPreserveTests(unittest.TestCase):
                 encoding="utf-8",
             )
             proposal = build_proposal(source, job)
-            supported = [change for change in proposal["changes"] if change["supported"]]
+            supported = [
+                change
+                for change in proposal["changes"]
+                if change["supported"]
+            ]
             proposal_path = root / "proposal.json"
             proposal_path.write_text(json.dumps(proposal), encoding="utf-8")
             manifest = root / "approved.json"
             manifest.write_text(
                 json.dumps(
                     {
+                        "schema_version": 2,
                         "proposal": str(proposal_path),
+                        "proposal_digest": proposal["proposal_digest"],
                         "approved_change_ids": [supported[0]["id"]],
                         "output": str(root / "fake.pdf"),
                     }
