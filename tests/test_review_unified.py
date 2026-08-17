@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from ats_agent.cli import main as cli_main
+from ats_agent.hashing import compute_proposal_digest
 from ats_agent.review import (
     build_approval_manifest,
     render_html,
@@ -16,7 +17,7 @@ from ats_agent.review import (
 
 class UnifiedReviewTests(unittest.TestCase):
     def proposal(self) -> dict:
-        return {
+        proposal = {
             "schema_version": 5,
             "status": "draft",
             "proposal_id": "P-REVIEW",
@@ -99,6 +100,8 @@ class UnifiedReviewTests(unittest.TestCase):
                 }
             },
         }
+        proposal["proposal_digest"] = compute_proposal_digest(proposal)
+        return proposal
 
     def test_redacted_review_contains_no_candidate_content_or_paths(self) -> None:
         proposal = self.proposal()
@@ -121,7 +124,7 @@ class UnifiedReviewTests(unittest.TestCase):
         ):
             self.assertNotIn(secret, combined)
         self.assertIn("Privacy-safe redacted review", combined)
-        self.assertIn("a" * 64, combined)
+        self.assertIn(proposal["proposal_digest"], combined)
         self.assertIn("[redacted]", combined)
 
     def test_full_review_escapes_html_and_warns_about_sensitive_data(self) -> None:
@@ -141,6 +144,30 @@ class UnifiedReviewTests(unittest.TestCase):
         )
         self.assertIn("Contains sensitive candidate evidence", result)
 
+    def test_review_explains_coverage_ranked_gaps_and_conflicts(self) -> None:
+        proposal = self.proposal()
+        proposal["coverage"] = {
+            "baseline": [
+                {"requirement_id": "R1", "coverage": "direct"},
+                {"requirement_id": "R2", "coverage": "unsupported"},
+            ],
+            "proposed_variants": [{"change_id": "C1", "variant_id": "balanced"}],
+        }
+        proposal["gap_recommendations"] = [{
+            "importance": "mandatory",
+            "keywords": ["tableau"],
+            "recommendation": "Build and document genuine candidate evidence.",
+            "source_quality": {"source_type": "official_job_page", "source_url": "https://jobs.example.com"},
+        }]
+        proposal["evidence_conflicts"] = [{"kind": "CGPA", "status": "unresolved"}]
+        markdown = render_markdown(proposal)
+        html = render_html(proposal, proposal_filename="proposal.json", default_output="tailored.docx")
+        self.assertIn("Already covered requirements:** 1", markdown)
+        self.assertIn("Ranked Evidence-Building Gaps", markdown)
+        self.assertIn("Factual Conflicts", markdown)
+        self.assertIn("unsupported: 1", html)
+        self.assertIn("Ranked evidence-building gaps", html)
+
     def test_build_approval_manifest_validates_supported_changes_and_variants(self) -> None:
         manifest = build_approval_manifest(
             self.proposal(),
@@ -151,7 +178,7 @@ class UnifiedReviewTests(unittest.TestCase):
             force=True,
         )
         self.assertEqual(manifest["schema_version"], 2)
-        self.assertEqual(manifest["proposal_digest"], "a" * 64)
+        self.assertEqual(manifest["proposal_digest"], self.proposal()["proposal_digest"])
         self.assertEqual(manifest["approved_change_ids"], ["C1"])
         self.assertEqual(
             manifest["selections"],
@@ -183,7 +210,7 @@ class UnifiedReviewTests(unittest.TestCase):
                 redacted=True,
             )
             self.assertEqual(set(paths), {"proposal", "markdown", "html"})
-            self.assertTrue((root / "proposal.json").is_file())
+            self.assertTrue((root / "proposal.redacted.json").is_file())
             self.assertTrue((root / "proposal.md").is_file())
             self.assertTrue((root / "review.html").is_file())
             self.assertNotIn(
@@ -191,10 +218,21 @@ class UnifiedReviewTests(unittest.TestCase):
                 (root / "review.html").read_text(encoding="utf-8"),
             )
             self.assertEqual(
-                json.loads((root / "proposal.json").read_text(encoding="utf-8"))[
+                json.loads((root / "proposal.redacted.json").read_text(encoding="utf-8"))[
                     "proposal_id"
                 ],
                 "P-REVIEW",
+            )
+
+    def test_invalid_canonical_bundle_is_marked_blocked(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            proposal = self.proposal()
+            proposal["changes"][0]["reason"] = "tampered"
+            with self.assertRaisesRegex(ValueError, "digest"):
+                write_review_bundle(proposal, Path(directory))
+            self.assertEqual(
+                json.loads((Path(directory) / "blocked.json").read_text(encoding="utf-8"))["status"],
+                "blocked",
             )
 
     def test_cli_approve_creates_manifest_without_editing_a_resume(self) -> None:
@@ -221,7 +259,7 @@ class UnifiedReviewTests(unittest.TestCase):
             )
             self.assertEqual(result, 0)
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            self.assertEqual(manifest["proposal_digest"], "a" * 64)
+            self.assertEqual(manifest["proposal_digest"], self.proposal()["proposal_digest"])
             self.assertEqual(manifest["approved_change_ids"], ["C1"])
             self.assertFalse((root / "tailored.docx").exists())
 

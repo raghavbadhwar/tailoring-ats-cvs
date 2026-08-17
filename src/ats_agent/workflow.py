@@ -4,19 +4,21 @@ from __future__ import annotations
 import difflib
 import json
 import os
+import re
 import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
 
-from . import __version__
 from .agents import career_report
 from .artifacts import register_artifacts
-from .documents import patch_document
+from .documents import docx_structure_fingerprint, patch_document
 from .evidence import (
     EvidenceLedger,
     EvidenceSource,
     SourceFragment,
     build_evidence_ledger,
+    evidence_conflicts,
 )
 from .formatting import audit_file, audit_text
 from .hashing import (
@@ -27,22 +29,102 @@ from .hashing import (
 )
 from .ingestion import ExtractionError, load
 from .models import ApprovalManifest, ProposalEnvelope
+from .providers import DeterministicRewriteProvider, RewriteProvider
 from .requirements import (
+    TERM_ALIASES,
     evaluate_hard_gates,
     extract_requirements,
     map_requirements,
 )
 from .rewriting import propose_supported_changes
-from .validation import validate_change
+from .validation import near_duplicate_cv_lines, validate_change
 
 SCHEMA_VERSION = 5
 POLICY_VERSION = "evidence-policy-v1"
 ONTOLOGY_VERSION = "requirements-v1"
 ALLOWED_OUTPUT_SUFFIXES = {".txt", ".md", ".markdown", ".docx"}
+MAX_RESEARCH_AGE = timedelta(days=7)
+
+
+def finalize_proposal(payload: dict) -> dict:
+    """Validate the final proposal shape, bind its digest, and verify it."""
+
+    draft = dict(payload)
+    draft["proposal_digest"] = "0" * 64
+    canonical = ProposalEnvelope.model_validate(draft).model_dump(mode="json")
+    canonical["proposal_digest"] = compute_proposal_digest(canonical)
+    finalized = ProposalEnvelope.model_validate(canonical).model_dump(mode="json")
+    verify_proposal_digest(finalized)
+    return finalized
+
+
+def _coverage_report(mappings: Iterable[dict], changes: Iterable[dict]) -> dict:
+    baseline = [
+        {
+            "requirement_id": item["requirement_id"],
+            "terms": item.get("normalized_terms", []),
+            "coverage": item.get("coverage"),
+        }
+        for item in mappings
+    ]
+    variants = [
+        {
+            "change_id": change["id"],
+            "variant_id": variant["id"],
+            "terms_added": variant.get("coverage_delta", []),
+            "reason": change.get("value_reason", change.get("reason", "")),
+        }
+        for change in changes
+        for variant in change.get("variants", [])
+        if change.get("supported")
+    ]
+    return {"baseline": baseline, "proposed_variants": variants}
+
+
+def _validated_coverage(requirements: Iterable[dict], text: str) -> dict:
+    """Measure visible requirement terms in the parser-readable output."""
+
+    visible = text.lower()
+    records: list[dict] = []
+    for requirement in requirements:
+        terms = list(requirement.get("normalized_terms", []))
+        covered = [
+            term
+            for term in terms
+            if any(
+                re.search(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])", visible)
+                for alias in TERM_ALIASES.get(term, (term,))
+            )
+        ]
+        records.append(
+            {
+                "requirement_id": requirement["id"],
+                "covered_terms": covered,
+                "missing_terms": [term for term in terms if term not in covered],
+            }
+        )
+    return {"requirements": records, "covered_term_count": sum(len(item["covered_terms"]) for item in records)}
 
 
 def _absolute(path: Path) -> Path:
     return path.expanduser().resolve()
+
+
+def _validate_research_freshness(proposal: dict) -> None:
+    """Require a new capture before applying an old public-job proposal."""
+
+    research = proposal.get("research")
+    if not isinstance(research, dict):
+        return
+    captured_at = research.get("captured_at")
+    if not isinstance(captured_at, str):
+        raise ValueError("research proposal has no liveness timestamp; refresh before apply")
+    try:
+        captured = datetime.fromisoformat(captured_at.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("research liveness timestamp is invalid; refresh before apply") from exc
+    if captured.tzinfo is None or datetime.now(timezone.utc) - captured.astimezone(timezone.utc) > MAX_RESEARCH_AGE:
+        raise ValueError("research capture is stale; refresh before apply")
 
 
 def _source_from_loaded(
@@ -70,6 +152,8 @@ def build_proposal(
     evidence_paths: Iterable[Path] | None = None,
     candidate_id: str = "candidate",
     company_context: Path | None = None,
+    provider: RewriteProvider | None = None,
+    additional_requirements: Iterable[dict] | None = None,
 ) -> dict:
     """Build a typed, content-bound proposal without editing any source."""
 
@@ -106,15 +190,49 @@ def build_proposal(
         for loaded in loaded_evidence
     )
     ledger = build_evidence_ledger(candidate_id, sources)
+    duplicate_warnings = [
+        {
+            "evidence_id": item.id,
+            "status": "review_only",
+            "reason": "Supporting evidence closely overlaps an existing CV line.",
+            "matching_cv_lines": near_duplicate_cv_lines(item.text, cv["body_text"]),
+        }
+        for item in ledger.items
+        if item.source == "supporting" and near_duplicate_cv_lines(item.text, cv["body_text"])
+    ]
     requirements = extract_requirements(jd["text"])
+    if additional_requirements:
+        from .requirements import merge_requirements
+
+        requirements = merge_requirements(requirements, additional_requirements)
     mappings = map_requirements(requirements, ledger)
     hard_gates = evaluate_hard_gates(requirements, ledger)
+    selected_provider = provider or DeterministicRewriteProvider()
     changes = propose_supported_changes(
         cv["body_text"],
         requirements,
         mappings,
         ledger,
+        provider=selected_provider,
     )
+    conflicts = evidence_conflicts(ledger)
+    conflicting_ids: set[str] = set()
+    for conflict in conflicts:
+        evidence_ids = conflict.get("evidence_ids")
+        if isinstance(evidence_ids, list):
+            conflicting_ids.update(
+                evidence_id
+                for evidence_id in evidence_ids
+                if isinstance(evidence_id, str)
+            )
+    for change in changes:
+        if conflicting_ids.intersection(change.get("evidence_ids", [])):
+            change["supported"] = False
+            change["status"] = "blocked_conflict"
+            change["reason"] = (
+                "Candidate evidence conflicts on a scoped fact; provide "
+                "reconciled evidence before using this change."
+            )
     report = career_report(
         cv["body_text"],
         jd["text"],
@@ -155,8 +273,8 @@ def build_proposal(
         "artifacts": artifact_records,
         "policy_version": POLICY_VERSION,
         "ontology_version": ONTOLOGY_VERSION,
-        "provider": "deterministic",
-        "provider_version": __version__,
+        "provider": selected_provider.provider_id,
+        "provider_version": selected_provider.provider_version,
         "source": str(resume),
         "source_format": cv["format"],
         "job_description": str(job_description),
@@ -167,6 +285,9 @@ def build_proposal(
             str(company_context_path) if company_context_path else None
         ),
         "evidence_ledger": ledger.to_dicts(),
+        "evidence_conflicts": conflicts,
+        "duplicate_warnings": duplicate_warnings,
+        "coverage": _coverage_report(mappings, changes),
         "requirements": requirements,
         "requirement_evidence": mappings,
         "hard_gates": hard_gates,
@@ -178,8 +299,7 @@ def build_proposal(
             "job_description": jd["quality"],
         },
     }
-    payload["proposal_digest"] = compute_proposal_digest(payload)
-    return ProposalEnvelope.model_validate(payload).model_dump(mode="json")
+    return finalize_proposal(payload)
 
 
 def _sha(path: Path) -> str:
@@ -365,6 +485,7 @@ def apply_manifest(
             "proposal digest in approval manifest does not match proposal"
         )
     proposal = ProposalEnvelope.model_validate(proposal_data)
+    _validate_research_freshness(proposal_data)
     source = _verify_artifacts(
         proposal,
         proposal_parent=proposal_path.parent,
@@ -406,6 +527,7 @@ def apply_manifest(
             changes[selection["change_id"]],
             selection.get("variant_id"),
         )
+        change["max_character_growth"] = approval.max_character_growth
         validate_change(change, ledger)
         anchor = change.get("anchor") or {}
         conflict_key = (
@@ -431,6 +553,11 @@ def apply_manifest(
     mode = approval.document_mode
 
     original = load(source)["body_text"]
+    format_fingerprint = (
+        docx_structure_fingerprint(source)
+        if mode == "strict-preserve" and source.suffix.lower() == ".docx"
+        else None
+    )
     temporary = _temporary_output(output)
     loaded_output: dict
     updated: str
@@ -440,6 +567,8 @@ def apply_manifest(
         updated = loaded_output["body_text"]
         if updated == original:
             raise ValueError("approved changes produced no output change")
+        if format_fingerprint and docx_structure_fingerprint(temporary) != format_fingerprint:
+            raise ValueError("strict-preserve structural fingerprint changed")
         for change in materialized:
             if (
                 change["operation"] != "delete_span"
@@ -486,6 +615,11 @@ def apply_manifest(
         "source_overwrite": False,
         "source_sha256": _sha(source),
         "output_sha256": _sha(output),
+        "format_lock": {
+            "status": "verified" if format_fingerprint else "not_requested",
+            "structural_fingerprint": format_fingerprint,
+            "rendered_layout": "unverified",
+        },
         "diff": diff,
         "validation": {
             "path": str(output),
@@ -494,6 +628,11 @@ def apply_manifest(
                 loaded_output["text"],
                 loaded_output.get("diagnostics"),
             ),
+        },
+        "coverage": {
+            "baseline": proposal_data.get("coverage", {}).get("baseline", []),
+            "proposed_variants": proposal_data.get("coverage", {}).get("proposed_variants", []),
+            "validated_output": _validated_coverage(proposal_data["requirements"], updated),
         },
     }
     log = output.with_suffix(output.suffix + ".applied.json")

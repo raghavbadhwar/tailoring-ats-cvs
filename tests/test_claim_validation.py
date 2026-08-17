@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from ats_agent.evidence import EvidenceSource, build_evidence_ledger
-from ats_agent.validation import validate_change
+from ats_agent.validation import near_duplicate_cv_lines, validate_change
 
 
 class AtomicClaimValidationTests(unittest.TestCase):
@@ -94,6 +94,48 @@ class AtomicClaimValidationTests(unittest.TestCase):
         }
         with self.assertRaisesRegex(ValueError, "edited source span"):
             validate_change(change, ledger)
+
+    def test_normalized_noop_is_rejected(self) -> None:
+        ledger = self.ledger("SKILLS\nPython, SQL\n")
+        item = ledger.items[0]
+        with self.assertRaisesRegex(ValueError, "no-op"):
+            validate_change(
+                {
+                    "id": "C1",
+                    "operation": "replace_span",
+                    "expected_text": item.text,
+                    "replacement_text": "python / sql",
+                    "evidence_ids": [item.id],
+                    "supported": True,
+                },
+                ledger,
+            )
+
+    def test_variant_duplicating_another_cv_line_is_rejected(self) -> None:
+        ledger = self.ledger("PROJECTS\nBuilt Python workflows.\nSKILLS\nPython, SQL\n")
+        item = next(item for item in ledger.items if "Built Python" in item.text)
+        with self.assertRaisesRegex(ValueError, "duplicates existing CV text"):
+            validate_change(
+                {
+                    "id": "C1",
+                    "operation": "replace_span",
+                    "expected_text": item.text,
+                    "replacement_text": "Python / SQL",
+                    "evidence_ids": [item.id],
+                    "supported": True,
+                },
+                ledger,
+                resume_text="PROJECTS\nBuilt Python workflows.\nSKILLS\nPython, SQL\n",
+            )
+
+    def test_near_duplicate_is_review_only(self) -> None:
+        self.assertEqual(
+            near_duplicate_cv_lines(
+                "Built a Python workflow with SQL reporting and validation.",
+                "PROJECTS\nBuilt a Python workflow with SQL reporting validation.\n",
+            ),
+            ["Built a Python workflow with SQL reporting validation."],
+        )
 
 
 if __name__ == "__main__":

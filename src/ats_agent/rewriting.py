@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import hashlib
 from collections.abc import Iterable
 
 from .evidence import EvidenceItem, EvidenceLedger
@@ -11,7 +12,9 @@ from .providers import (
     RewriteProvider,
     generate_with_fallback,
 )
-from .validation import validate_change
+from .requirements import TERM_ALIASES
+from .hashing import canonical_json
+from .validation import near_duplicate_cv_lines, validate_change
 
 _SECTION_HEADINGS: dict[str, tuple[str, ...]] = {
     "summary": ("summary", "profile", "professional summary"),
@@ -58,15 +61,30 @@ def _default_variant(variants: list[dict]) -> str:
     return "balanced" if "balanced" in ids else variants[0]["id"]
 
 
-def _validated_change(change: dict, ledger: EvidenceLedger) -> dict:
+def _validated_change(change: dict, ledger: EvidenceLedger, cv: str) -> dict:
     valid_variants: list[dict] = []
     for variant in change.get("variants") or []:
         candidate = {**change, "replacement_text": variant["text"]}
         try:
-            validate_change(candidate, ledger)
+            validate_change(candidate, ledger, resume_text=cv)
         except ValueError:
             continue
-        valid_variants.append(variant)
+        coverage_delta = [
+            term
+            for term in change.get("terms_introduced", [])
+            if any(
+                re.search(
+                    rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])",
+                    variant["text"].lower(),
+                )
+                and not re.search(
+                    rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])",
+                    str(change.get("expected_text", "")).lower(),
+                )
+                for alias in TERM_ALIASES.get(term, (term,))
+            )
+        ]
+        valid_variants.append({**variant, "coverage_delta": coverage_delta})
     if not valid_variants:
         raise ValueError(f"no safe rewrite variants for {change.get('id')}")
     change["variants"] = valid_variants
@@ -75,6 +93,17 @@ def _validated_change(change: dict, ledger: EvidenceLedger) -> dict:
         variant["text"]
         for variant in valid_variants
         if variant["id"] == change["default_variant"]
+    )
+    selected = next(
+        variant
+        for variant in valid_variants
+        if variant["id"] == change["default_variant"]
+    )
+    change["coverage_delta"] = selected["coverage_delta"]
+    change["value_reason"] = (
+        "Adds supported requirement terminology."
+        if change["coverage_delta"]
+        else "Improves wording without changing the supported candidate claim."
     )
     return change
 
@@ -170,14 +199,26 @@ def _variants_for(
     text: str,
     terms: Iterable[str],
     target_section: str,
-) -> tuple[list[dict], str, str, str | None]:
+    evidence_ids: tuple[str, ...],
+    ownership_ceiling: str,
+) -> tuple[list[dict], str, str, str | None, str, str]:
     context = RewriteContext(
         original_text=text,
         terms=tuple(dict.fromkeys(str(term) for term in terms)),
         target_section=target_section,
         max_characters=max(120, min(500, len(text) * 2 + 40)),
+        evidence_ids=evidence_ids,
+        ownership_ceiling=ownership_ceiling,
     )
-    return generate_with_fallback(provider, context)
+    variants, provider_id, provider_version, fallback = generate_with_fallback(provider, context)
+    return (
+        variants,
+        provider_id,
+        provider_version,
+        fallback,
+        hashlib.sha256(canonical_json(context.__dict__)).hexdigest(),
+        hashlib.sha256(canonical_json(variants)).hexdigest(),
+    )
 
 
 def propose_supported_changes(
@@ -194,6 +235,11 @@ def propose_supported_changes(
     matches = list(matches)
     match_index = _matches_by_evidence(matches)
     changes: list[dict] = []
+    normalized_resume = {
+        " ".join(re.findall(r"[a-z0-9]+", item.text.lower()))
+        for item in ledger.items
+        if item.source == "resume"
+    }
 
     for item in ledger.items:
         if item.source != "resume" or item.text not in cv:
@@ -206,11 +252,13 @@ def propose_supported_changes(
         if not terms:
             continue
         section = _target_section(cv, item)
-        variants, provider_id, provider_version, fallback_reason = _variants_for(
+        variants, provider_id, provider_version, fallback_reason, input_digest, output_digest = _variants_for(
             selected_provider,
             text=item.text,
             terms=terms,
             target_section=section,
+            evidence_ids=(item.id,),
+            ownership_ceiling=item.ownership,
         )
         if not variants or all(
             variant["text"] == item.text for variant in variants
@@ -231,13 +279,15 @@ def propose_supported_changes(
             "provider": provider_id,
             "provider_version": provider_version,
             "provider_fallback": fallback_reason,
+            "provider_input_digest": input_digest,
+            "provider_output_digest": output_digest,
             "reason": (
                 "Improve clarity and surface job terminology already "
                 "supported by candidate evidence."
             ),
         }
         try:
-            changes.append(_validated_change(change, ledger))
+            changes.append(_validated_change(change, ledger, cv))
         except ValueError:
             continue
 
@@ -258,14 +308,20 @@ def propose_supported_changes(
             if evidence_id in surfaced_ids:
                 continue
             item = ledger.by_id()[evidence_id]
+            if " ".join(re.findall(r"[a-z0-9]+", item.text.lower())) in normalized_resume:
+                continue
+            if near_duplicate_cv_lines(item.text, cv):
+                continue
             terms = list(match.get("normalized_terms", []))
             section = _target_section(cv, item)
             anchor = _find_section_anchor(cv, ledger, section)
-            variants, provider_id, provider_version, fallback_reason = _variants_for(
+            variants, provider_id, provider_version, fallback_reason, input_digest, output_digest = _variants_for(
                 selected_provider,
                 text=item.text,
                 terms=terms,
                 target_section=section,
+                evidence_ids=(item.id,),
+                ownership_ceiling=item.ownership,
             )
             if not variants:
                 continue
@@ -284,13 +340,15 @@ def propose_supported_changes(
                 "provider": provider_id,
                 "provider_version": provider_version,
                 "provider_fallback": fallback_reason,
+                "provider_input_digest": input_digest,
+                "provider_output_digest": output_digest,
                 "reason": (
                     "Surface candidate evidence relevant to a supported job "
                     "requirement in the correct CV section."
                 ),
             }
             try:
-                changes.append(_validated_change(change, ledger))
+                changes.append(_validated_change(change, ledger, cv))
                 surfaced_ids.add(evidence_id)
             except ValueError:
                 continue

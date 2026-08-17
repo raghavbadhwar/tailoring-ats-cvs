@@ -12,7 +12,7 @@ ArtifactKind = Literal[
     "job_description",
     "company_context",
 ]
-DocumentMode = Literal["preserve", "rebuild"]
+DocumentMode = Literal["preserve", "strict-preserve", "rebuild"]
 
 
 class SourceSpan(BaseModel):
@@ -77,6 +77,7 @@ class ApprovalManifest(BaseModel):
     mode: DocumentMode | None = None
     output: str | None = None
     force: bool = False
+    max_character_growth: int = Field(default=120, ge=0, le=2000)
 
     @model_validator(mode="before")
     @classmethod

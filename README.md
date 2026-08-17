@@ -4,24 +4,27 @@ An approval-first tool that reads a candidate CV, a job description, and optiona
 
 ## Public job-list research
 
-Use a JSON list of public HTTPS job URLs—or Career-Ops' `data/pipeline.md`—to produce one draft proposal per pending role. Scrapling captures the listed job page and optional official company-context pages without credentials, redirects, proxies, or browser automation. The batch output includes a keyword-coverage map showing which job terms are directly supported, transferable, or unsupported by the candidate evidence. Unsupported keywords are reported as gaps and are never inserted into the CV.
+Use an unfiltered AI Job Search JSON export to produce one draft proposal per role. Scrapling captures the listed job page and optional official company-context pages without credentials, redirects, proxies, or browser automation. The batch output retains blocked and eligibility-warning roles, carries a capture manifest, and reports which job terms are directly supported, transferable, or unsupported by candidate evidence. Unsupported keywords are reported as gaps and are never inserted into the CV.
 
 ```json
-{"jobs": [{"id": "analyst", "job_url": "https://careers.example.com/analyst", "context_urls": ["https://example.com/careers"]}]}
+{"jobs": [{"id": "analyst", "company": "Example", "role": "Analyst", "job_url": "https://careers.example.com/analyst", "official_context_urls": ["https://example.com/careers"], "fallback": {"description": "Only used when official capture fails.", "source_url": "https://listing.example.com/analyst", "provider": "Example Listings", "fetched_at": "2026-08-17T00:00:00Z"}}]}
 ```
 
 ```bash
-ats-agent research-jobs resume.pdf jobs.json --candidate-id student --out runs/analyst-batch
+ats-agent research-jobs resume.docx jobs.json --candidate-id student \
+  --evidence candidate-projects.md \
+  --context-url https://example.com/careers \
+  --out runs/analyst-batch
 ```
 
-Career-Ops handoff (read-only; processed rows and tracker data are not changed):
+Career-Ops Markdown remains a backward-compatible, read-only input; processed rows and tracker data are not changed:
 
 ```bash
 ats-agent research-jobs /path/to/career-ops/cv.md /path/to/career-ops/data/pipeline.md \
   --candidate-id student --out runs/career-ops-batch
 ```
 
-Pending rows use Career-Ops' existing `- [ ] URL | Company | Role` format. Career-Ops remains the system for job discovery, ranking, liveness checks, and application tracking; `ats-agent` remains the approval-gated CV engine.
+Pending rows use Career-Ops' existing `- [ ] URL | Company | Role` format. AI Job Search remains the system for job discovery and ranking; `ats-agent` remains the approval-gated CV engine. Aggregator fallback content is visibly labelled non-official and is never presented as employer-confirmed. Public-job proposals record a liveness timestamp and must be refreshed after seven days before apply.
 
 It does **not** invent qualifications, autonomously submit applications, or claim a universal ATS score, interview probability, or employer-acceptance probability.
 
@@ -59,7 +62,7 @@ The active upgrade is ordinary, reviewable source code. CI rejects encoded sourc
 - canonical proposal digest and explicit digest-bound approval manifests
 - full and redacted Markdown/HTML review bundles
 - transactional TXT/Markdown/DOCX apply with source-overwrite and existing-output protection
-- DOCX preserve/rebuild modes, post-write reparse, diff, hashes, and applied-change receipts
+- DOCX preserve, strict-preserve, and rebuild modes, post-write reparse, diff, hashes, and applied-change receipts
 - Benchmark v3 public, adversarial, document, smoke, and human-evaluation queue infrastructure
 - Python 3.10–3.13 compatibility on Linux and Windows
 - dependency audit, Bandit, CodeQL, dependency review, secret-pattern scan, and CycloneDX SBOM generation

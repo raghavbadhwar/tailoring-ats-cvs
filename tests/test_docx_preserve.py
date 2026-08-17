@@ -5,6 +5,7 @@ from pathlib import Path
 
 from docx import Document
 
+from ats_agent.documents import patch_document
 from ats_agent.ingestion import extract
 from ats_agent.workflow import apply_manifest, build_proposal
 
@@ -67,6 +68,9 @@ class DocxPreserveTests(unittest.TestCase):
 
             self.assertEqual(source.read_bytes(), original_bytes)
             self.assertEqual(result["document_mode"], "preserve")
+            self.assertEqual(result["format_lock"]["status"], "not_requested")
+            self.assertIn("validated_output", result["coverage"])
+            self.assertGreater(result["coverage"]["validated_output"]["covered_term_count"], 0)
             tailored = Document(output)
             tailored_paragraph = next(
                 item
@@ -119,6 +123,44 @@ class DocxPreserveTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(ValueError, "genuine PDF renderer"):
                 apply_manifest(manifest, [supported[0]["id"]])
+
+    def test_strict_preserve_rejects_paragraph_insertions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, output = root / "resume.docx", root / "out.docx"
+            Document().save(source)
+            with self.assertRaisesRegex(ValueError, "anchored text replacement only"):
+                patch_document(
+                    source,
+                    output,
+                    [{"id": "C1", "operation": "insert_after", "replacement_text": "New", "anchor": {}}],
+                    mode="strict-preserve",
+                )
+
+    def test_strict_preserve_reports_a_verified_structural_lock(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, job = root / "resume.docx", root / "job.md"
+            proposal_path, output = root / "proposal.json", root / "out.docx"
+            document = Document()
+            document.add_paragraph("Helped build automated workflows with 42 tests.")
+            document.save(source)
+            job.write_text("Workflow automation is required.", encoding="utf-8")
+            proposal = build_proposal(source, job)
+            change = next(item for item in proposal["changes"] if item["supported"])
+            proposal_path.write_text(json.dumps(proposal), encoding="utf-8")
+            manifest = root / "approval.json"
+            manifest.write_text(json.dumps({
+                "schema_version": 2,
+                "proposal": str(proposal_path),
+                "proposal_digest": proposal["proposal_digest"],
+                "approved_change_ids": [change["id"]],
+                "output": str(output),
+                "document_mode": "strict-preserve",
+            }), encoding="utf-8")
+            result = apply_manifest(manifest, [change["id"]])
+            self.assertEqual(result["format_lock"]["status"], "verified")
+            self.assertEqual(result["format_lock"]["rendered_layout"], "unverified")
 
 
 if __name__ == "__main__":

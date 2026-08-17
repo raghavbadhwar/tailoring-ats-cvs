@@ -68,6 +68,18 @@ COUNT_METRIC = re.compile(
     r"(?<![A-Za-z0-9])(?P<value>\d+(?:[.,]\d+)?)\s+"
     r"(?P<unit>[A-Za-z][A-Za-z-]*)\b"
 )
+GRADE_VALUE = re.compile(
+    r"\b(?:cgpa|gpa)\s*(?:of|:|=)?\s*(?P<value>\d+(?:\.\d+)?)",
+    re.IGNORECASE,
+)
+GRADUATION_VALUE = re.compile(
+    r"\b(?:graduat(?:e|ing|ion)|class\s+of)\D{0,24}(?P<value>20\d{2})\b",
+    re.IGNORECASE,
+)
+EMPLOYMENT_DATE = re.compile(
+    r"\b(?:joined|started|employed|employment|worked)\D{0,24}(?P<value>(?:19|20)\d{2})\b",
+    re.IGNORECASE,
+)
 
 
 def _optional_int(value: object) -> int | None:
@@ -620,3 +632,86 @@ def build_evidence_ledger(
                 )
             )
     return EvidenceLedger(candidate_id=candidate_id, items=tuple(items))
+
+
+def _conflict_scope(text: str) -> str:
+    return " ".join(
+        token
+        for token in re.findall(r"[a-z]+", text.lower())
+        if token not in {"a", "an", "and", "by", "of", "the", "to", "with"}
+    )
+
+
+def _conflict_record(item: EvidenceItem, value: str) -> dict[str, str]:
+    return {
+        "value": value,
+        "evidence_id": item.id,
+        "source": item.source,
+        "source_span": item.source_span,
+    }
+
+
+def _authorization_value(text: str) -> str | None:
+    body = text.lower()
+    if re.search(r"\b(?:require|need)s? (?:visa )?sponsorship\b", body):
+        return "requires_sponsorship"
+    if re.search(r"\b(?:authori[sz]ed|eligible|right to work)\b", body):
+        return "authorized"
+    return None
+
+
+def _employment_status(text: str) -> str | None:
+    body = text.lower()
+    if "unemployed" in body:
+        return "unemployed"
+    if re.search(r"\b(?:currently )?(?:employed|working)\b", body):
+        return "employed"
+    if re.search(r"\b(?:undergraduate|student)\b", body):
+        return "student"
+    return None
+
+
+def evidence_conflicts(ledger: EvidenceLedger) -> list[dict[str, object]]:
+    """Return unresolved candidate-fact conflicts without choosing a winner."""
+
+    values: dict[tuple[str, str], list[dict[str, str]]] = {}
+
+    def add(kind: str, scope: str, item: EvidenceItem, value: str) -> None:
+        values.setdefault((kind, scope), []).append(_conflict_record(item, value))
+
+    for item in ledger.items:
+        for match in GRADE_VALUE.finditer(item.text):
+            kind = match.group(0).split()[0].lower()
+            add(kind, kind, item, match.group("value"))
+        for match in GRADUATION_VALUE.finditer(item.text):
+            add("graduation_year", "graduation", item, match.group("value"))
+        for match in EMPLOYMENT_DATE.finditer(item.text):
+            add("employment_date", "employment", item, match.group("value"))
+        authorization = _authorization_value(item.text)
+        if authorization:
+            add("work_authorization", "authorization", item, authorization)
+        status = _employment_status(item.text)
+        if status:
+            add("employment_status", "current", item, status)
+        for claim in item.atomic_claims:
+            for metric in claim.metrics:
+                kind = (
+                    "percentage"
+                    if metric.unit == "percent"
+                    else "money"
+                    if metric.unit in {"inr", "usd", "eur", "gbp", "rupee", "dollar"}
+                    else "count"
+                )
+                scope = _conflict_scope(metric.scope)
+                add(kind, f"{metric.unit}:{scope}", item, metric.value)
+    return [
+        {
+            "kind": kind,
+            "scope": scope,
+            "status": "unresolved",
+            "values": records,
+            "evidence_ids": [record["evidence_id"] for record in records],
+        }
+        for (kind, scope), records in values.items()
+        if len({record["value"] for record in records}) > 1
+    ]

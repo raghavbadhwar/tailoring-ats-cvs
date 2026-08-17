@@ -7,5 +7,7 @@ The first supported integrations are:
 3. `ats-cv` adapter launcher that delegates to `ats-agent`.
 
 All integrations use the same CLI, proposal schemas, approval manifests, exit
-codes, and document outputs. No adapter can approve changes automatically. MCP
-and web interfaces remain out of scope for the first adapter release.
+codes, and document outputs. AI Job Search remains the discovery/ranking handoff
+and exports every selected role without eligibility filtering. No adapter can
+approve changes automatically. MCP and web interfaces remain out of scope for
+the first adapter release.

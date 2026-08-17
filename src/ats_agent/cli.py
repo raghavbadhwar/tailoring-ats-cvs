@@ -19,6 +19,7 @@ from .benchmark import (
 from .formatting import audit_file
 from .ingestion import load
 from .job_research import research_jobs
+from .providers import CommandRewriteProvider
 from .review import (
     build_approval_manifest,
     render_html,
@@ -68,9 +69,20 @@ def _add_analysis_inputs(command: argparse.ArgumentParser) -> None:
         default="candidate",
         help="stable candidate identifier used to isolate evidence",
     )
+    command.add_argument(
+        "--rewrite-command",
+        action="append",
+        default=[],
+        help="one executable or argument for the optional local command rewrite provider; repeat in order",
+    )
 
 
 def _proposal_from_args(args: argparse.Namespace) -> dict:
+    provider = (
+        CommandRewriteProvider(tuple(args.rewrite_command))
+        if args.rewrite_command
+        else None
+    )
     return build_proposal(
         Path(args.resume),
         Path(args.job_description),
@@ -79,6 +91,7 @@ def _proposal_from_args(args: argparse.Namespace) -> dict:
         company_context=(
             Path(args.company_context) if args.company_context else None
         ),
+        provider=provider,
     )
 
 
@@ -137,6 +150,7 @@ def _write_approval(args: argparse.Namespace) -> dict:
         output_document=args.output_document,
         document_mode=args.document_mode,
         force=args.force,
+        max_character_growth=args.max_character_growth,
     )
     _write_json(manifest_path, manifest)
     return {
@@ -309,6 +323,25 @@ def main(argv: list[str] | None = None) -> int:
     research.add_argument("job_list", type=_existing)
     research.add_argument("--out", required=True, help="new run directory")
     research.add_argument("--candidate-id", default="candidate")
+    research.add_argument(
+        "--evidence",
+        action="append",
+        default=[],
+        type=_existing,
+        help="additional candidate evidence file; repeatable",
+    )
+    research.add_argument(
+        "--context-url",
+        action="append",
+        default=[],
+        help="official public HTTPS context URL applied to each job; repeatable",
+    )
+    research.add_argument(
+        "--rewrite-command",
+        action="append",
+        default=[],
+        help="one executable or argument for the optional local command rewrite provider; repeat in order",
+    )
 
     review = sub.add_parser(
         "review",
@@ -350,8 +383,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     approve.add_argument(
         "--document-mode",
-        choices=("preserve", "rebuild"),
+        choices=("preserve", "strict-preserve", "rebuild"),
         default="preserve",
+    )
+    approve.add_argument(
+        "--max-character-growth",
+        type=int,
+        default=120,
+        help="maximum added characters per strict-preserve paragraph",
     )
     approve.add_argument(
         "--force",
@@ -453,11 +492,19 @@ def main(argv: list[str] | None = None) -> int:
                 "review_mode": "redacted" if args.redacted else "full",
             }
         elif args.command == "research-jobs":
+            provider = (
+                CommandRewriteProvider(tuple(args.rewrite_command))
+                if args.rewrite_command
+                else None
+            )
             payload = research_jobs(
                 Path(args.resume),
                 Path(args.job_list),
                 Path(args.out),
                 candidate_id=args.candidate_id,
+                evidence_paths=[Path(path) for path in args.evidence],
+                context_urls=args.context_url,
+                provider=provider,
             )
         else:
             payload = apply_manifest(Path(args.approval_manifest))

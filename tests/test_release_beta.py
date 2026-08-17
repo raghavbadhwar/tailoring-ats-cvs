@@ -17,6 +17,8 @@ class BetaReleaseContractTests(unittest.TestCase):
 
     def test_release_workflow_requires_protected_holdout_before_publish(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertIn('test "${GITHUB_REF_NAME}" = "v1.0.0-beta.3"', workflow)
+        self.assertIn('assert version == "1.0.0b3", version', workflow)
         self.assertIn("environment: release", workflow)
         self.assertIn("PRIVATE_HOLDOUT_B64", workflow)
         self.assertIn("release_check.py --private-holdout", workflow)

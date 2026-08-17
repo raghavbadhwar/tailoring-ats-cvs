@@ -203,6 +203,29 @@ class RequirementEngineTests(unittest.TestCase):
                 self.assertIn(mapping["coverage"], {"direct", "transferable"})
                 self.assertTrue(mapping["evidence_ids"])
 
+    def test_pilot_vocabulary_keeps_complete_requirement_clauses(self) -> None:
+        clause = (
+            "Use AI agents and tool use for evaluation design and "
+            "A/B testing for product analytics."
+        )
+        requirements = extract_requirements(clause)
+        terms = {
+            term for requirement in requirements for term in requirement["normalized_terms"]
+        }
+        self.assertTrue({"ai agents", "tool use", "evaluation design", "a/b testing", "product analytics"}.issubset(terms))
+        self.assertTrue(all(requirement["text"] == clause for requirement in requirements))
+
+    def test_availability_is_extracted_without_filtering_the_role(self) -> None:
+        requirement = next(
+            item
+            for item in extract_requirements(
+                "Candidates must be available for 6-12 months."
+            )
+            if item["kind"] == "availability"
+        )
+        self.assertEqual(requirement["duration"], "6-12 months")
+        self.assertEqual(requirement["category"], "availability")
+
 
 if __name__ == "__main__":
     unittest.main()
