@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from ats_agent.providers import DeterministicRewriteProvider, RewriteContext
+from ats_agent.workflow import build_proposal
 
 
 class DeterministicRewriteProviderTests(unittest.TestCase):
@@ -67,6 +68,21 @@ class DeterministicRewriteProviderTests(unittest.TestCase):
         provider = DeterministicRewriteProvider()
         self.assertEqual(provider.provider_id, "deterministic")
         self.assertRegex(provider.provider_version, r"^\d+\.\d+\.\d+$")
+
+    def test_proposal_records_the_selected_provider_identity(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            resume, job = root / "resume.txt", root / "job.txt"
+            resume.write_text("PROJECTS\nHelped build automated workflows.\n", encoding="utf-8")
+            job.write_text("Workflow automation is required.\n", encoding="utf-8")
+            proposal = build_proposal(resume, job, provider=DeterministicRewriteProvider())
+            self.assertEqual(proposal["provider"], "deterministic")
+            change = next(item for item in proposal["changes"] if item["supported"])
+            self.assertEqual(len(change["provider_input_digest"]), 64)
+            self.assertEqual(len(change["provider_output_digest"]), 64)
 
 
 if __name__ == "__main__":

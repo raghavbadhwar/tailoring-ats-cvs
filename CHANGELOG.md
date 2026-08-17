@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.0b3
+
+- Added approval-gated public job-list research through the local Scrapling CLI.
+- Added per-role evidence-bound keyword coverage and genuine-evidence gap recommendations.
+- Added a read-only Career-Ops pending-pipeline handoff.
+
 ## 1.0.0b2
 
 - Added portable Agent Skill for Codex and Claude Code plugin launchers.

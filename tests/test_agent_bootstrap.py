@@ -35,8 +35,11 @@ class BootstrapTests(unittest.TestCase):
             text=True,
             check=False,
         )
-        self.assertIn(completed.returncode, (0, 20))
-        self.assertIn(json.loads(completed.stdout)["status"], {"ready", "bootstrap_required"})
+        self.assertIn(completed.returncode, (0, 20, 21))
+        self.assertIn(
+            json.loads(completed.stdout)["status"],
+            {"ready", "bootstrap_required", "upgrade_required"},
+        )
 
     def test_missing_cli_never_installs_during_check(self) -> None:
         module = load_module()
@@ -47,11 +50,11 @@ class BootstrapTests(unittest.TestCase):
 
     def test_healthy_cli_is_ready(self) -> None:
         module = load_module()
-        doctor = {"package": {"version": "1.0.0b2"}, "strict_check": {"status": "passed"}}
+        doctor = {"package": {"version": "1.0.0b3"}, "strict_check": {"status": "passed"}}
         with patch.object(module.shutil, "which", return_value="/usr/bin/ats-agent"), patch.object(module.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout=json.dumps(doctor), stderr="")) as run:
             result = module.check_cli(POLICY)
         self.assertEqual(result["status"], "ready")
-        self.assertEqual(result["version"], "1.0.0b2")
+        self.assertEqual(result["version"], "1.0.0b3")
         self.assertFalse(run.call_args.kwargs.get("shell", False))
 
     def test_install_uses_pinned_uv_spec(self) -> None:
@@ -59,4 +62,4 @@ class BootstrapTests(unittest.TestCase):
         with patch.object(module.shutil, "which", side_effect=lambda name: "/usr/bin/uv" if name == "uv" else None), patch.object(module.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")) as run, patch.object(module, "check_cli", return_value={"status": "ready"}):
             result = module.install_cli(POLICY, "uv")
         self.assertEqual(result["status"], "installed")
-        self.assertIn("tailoring-ats-cvs[documents]==1.0.0b2", run.call_args.args[0])
+        self.assertIn("tailoring-ats-cvs[documents]==1.0.0b3", run.call_args.args[0])

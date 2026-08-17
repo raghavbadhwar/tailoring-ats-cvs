@@ -24,12 +24,12 @@ jobs:
       - name: Verify tag matches package beta
         shell: bash
         run: |
-          test "${GITHUB_REF_NAME}" = "v1.0.0-beta.2"
+          test "${GITHUB_REF_NAME}" = "v1.0.0-beta.3"
           python - <<'PY'
           import tomllib
           from pathlib import Path
           version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
-          assert version == "1.0.0b2", version
+          assert version == "1.0.0b3", version
           PY
       - name: Install release toolchain
         run: |
@@ -61,7 +61,7 @@ jobs:
       - name: Build wheel and source distribution
         run: |
           python -m build
-          # tailor-cv-agent-skill-v1.0.0-beta.2.zip and tailoring-ats-cvs-claude-plugin-v1.0.0-beta.2.zip
+          # tailor-cv-agent-skill-v1.0.0-beta.3.zip and tailoring-ats-cvs-claude-plugin-v1.0.0-beta.3.zip
           python scripts/build_agent_bundles.py --output dist/agent-adapters
           python scripts/verify_agent_bundle.py dist/agent-adapters
       - name: Clean-install wheel outside repository
@@ -97,7 +97,7 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             dist/* dist/agent-adapters/* sbom.cdx.json SHA256SUMS release-check.json benchmarks/v3/reports/*.json \
             --repo "$GITHUB_REPOSITORY" \
-            --title "Trustworthy CV Tailoring v1.0.0-beta.2" \
+            --title "Trustworthy CV Tailoring v1.0.0-beta.3" \
             --notes "Approval-first beta. Includes reproducible package artifacts, SBOM, checksums, public benchmark reports, and protected holdout verification metadata. No universal ATS or employer-acceptance claims are made." \
             --prerelease \
             --verify-tag

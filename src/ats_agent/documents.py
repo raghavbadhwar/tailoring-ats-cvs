@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
 import re
 import zipfile
 from pathlib import Path
@@ -293,6 +295,50 @@ def _patch_docx_xml(xml: bytes, changes: list[dict]) -> bytes:
     )
 
 
+def _docx_structure(xml: bytes) -> tuple:
+    root = safe_fromstring(xml)
+
+    def describe(node: ElementTree.Element) -> tuple:
+        attributes = tuple(
+            sorted(
+                (key, value)
+                for key, value in node.attrib.items()
+                if not (node.tag == WORD_NS + "t" and key == XML_SPACE)
+            )
+        )
+        return (node.tag, attributes, tuple(describe(child) for child in node))
+
+    return describe(root)
+
+
+def docx_structure_fingerprint(path: Path) -> str:
+    """Fingerprint package structure while deliberately excluding text values."""
+
+    with zipfile.ZipFile(path) as archive:
+        parts = {
+            name: (
+                _docx_structure(archive.read(name))
+                if name == "word/document.xml"
+                else hashlib.sha256(archive.read(name)).hexdigest()
+            )
+            for name in sorted(archive.namelist())
+        }
+    return hashlib.sha256(
+        json.dumps(parts, sort_keys=True, default=list).encode("utf-8")
+    ).hexdigest()
+
+
+def _validate_strict_changes(changes: list[dict]) -> None:
+    for change in changes:
+        if change.get("operation") not in {"replace", "replace_span"}:
+            raise ValueError("strict-preserve permits anchored text replacement only")
+        expected = str(change.get("expected_text") or "")
+        replacement = str(change.get("replacement_text") or "")
+        budget = int(change.get("max_character_growth", 120))
+        if budget < 0 or len(replacement) - len(expected) > budget:
+            raise ValueError("strict-preserve character-growth budget exceeded")
+
+
 def _apply_text(text: str, changes: list[dict]) -> str:
     result = text
     for change in [
@@ -373,8 +419,11 @@ def patch_document(
     if (
         source_suffix == ".docx"
         and output_suffix == ".docx"
-        and mode == "preserve"
+        and mode in {"preserve", "strict-preserve"}
     ):
+        if mode == "strict-preserve":
+            _validate_strict_changes(changes)
+            before = docx_structure_fingerprint(source)
         with zipfile.ZipFile(source) as archive:
             names = archive.namelist()
             files = {name: archive.read(name) for name in names}
@@ -385,6 +434,9 @@ def patch_document(
         with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
             for name, data in files.items():
                 archive.writestr(name, data)
+        if mode == "strict-preserve" and docx_structure_fingerprint(output) != before:
+            output.unlink(missing_ok=True)
+            raise ValueError("strict-preserve structural fingerprint changed")
         return
 
     loaded = load(source)

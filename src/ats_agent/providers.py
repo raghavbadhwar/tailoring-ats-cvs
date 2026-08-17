@@ -16,6 +16,8 @@ class RewriteContext:
     terms: tuple[str, ...] = ()
     target_section: str = "projects"
     max_characters: int = 500
+    evidence_ids: tuple[str, ...] = ()
+    ownership_ceiling: str = "contributor"
 
     def __post_init__(self) -> None:
         if not self.original_text.strip():
@@ -211,6 +213,7 @@ class CommandRewriteProvider:
             check=True,
             text=True,
             timeout=self.timeout_seconds,
+            shell=False,
         )
         payload = json.loads(completed.stdout)
         if not isinstance(payload, list):

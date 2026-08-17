@@ -25,7 +25,7 @@ After PR checks pass on the exact head:
 
 1. Merge the trustworthy-v1 PR into `main`.
 2. Confirm the exact merged SHA passes the required workflows.
-3. Create the annotated tag `v1.0.0-beta.2` on that exact SHA.
+3. Create the annotated tag `v1.0.0-beta.3` on that exact SHA.
 4. The tag-triggered `Release` workflow reruns release gates, the private holdout, security checks, package build, clean-wheel install, SBOM generation, and checksums.
 5. Only after those steps pass does the workflow create the GitHub prerelease.
 

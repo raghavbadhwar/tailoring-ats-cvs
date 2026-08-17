@@ -5,6 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from ats_agent.hashing import verify_proposal_digest
+from ats_agent.review import write_review_bundle
 from ats_agent.workflow import apply_manifest, build_proposal
 
 
@@ -106,6 +108,37 @@ class ProposalHashBindingTests(unittest.TestCase):
                 all(len(item["sha256"]) == 64 for item in artifacts)
             )
             self.assertEqual(len(proposal["proposal_digest"]), 64)
+            self.assertEqual(
+                verify_proposal_digest(json.loads(json.dumps(proposal))),
+                proposal["proposal_digest"],
+            )
+            self.assertTrue(proposal["coverage"]["baseline"])
+            self.assertTrue(proposal["coverage"]["proposed_variants"])
+
+    def test_full_review_bundle_persists_a_verifiable_proposal(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            case = self._prepare(root)
+            paths = write_review_bundle(case["proposal"], root / "review")
+            persisted = json.loads(Path(paths["proposal"]).read_text(encoding="utf-8"))
+            self.assertEqual(verify_proposal_digest(persisted), case["proposal"]["proposal_digest"])
+
+    def test_redacted_review_cannot_be_approved(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            case = self._prepare(root)
+            paths = write_review_bundle(case["proposal"], root / "review", redacted=True)
+            redacted = json.loads(Path(paths["proposal"]).read_text(encoding="utf-8"))
+            self.assertEqual(Path(paths["proposal"]).name, "proposal.redacted.json")
+            with self.assertRaisesRegex(ValueError, "redacted"):
+                from ats_agent.review import build_approval_manifest
+
+                build_approval_manifest(
+                    redacted,
+                    proposal_filename="proposal.redacted.json",
+                    selections=[(case["change"]["id"], case["variant_id"])],
+                    output_document="tailored.txt",
+                )
 
     def test_schema_v5_rejects_legacy_undigested_approval(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

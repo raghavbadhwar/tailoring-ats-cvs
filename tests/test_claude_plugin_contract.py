@@ -12,7 +12,7 @@ class ClaudePluginContractTests(unittest.TestCase):
     def test_manifest_points_to_portable_skill(self) -> None:
         manifest = json.loads((ROOT / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))
         self.assertEqual(manifest["name"], "tailoring-ats-cvs")
-        self.assertEqual(manifest["version"], "1.0.0-beta.2")
+        self.assertEqual(manifest["version"], "1.0.0-beta.3")
         self.assertEqual(manifest["skills"], ["./.agents/skills/tailor-cv"])
 
     def test_launchers_exist(self) -> None:

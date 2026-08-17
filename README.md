@@ -2,17 +2,41 @@
 
 An approval-first tool that reads a candidate CV, a job description, and optional supporting evidence; maps requirements to traceable candidate facts; proposes safe role-aligned rewrites; and applies only explicitly approved changes to a new output document.
 
+## Public job-list research
+
+Use an unfiltered AI Job Search JSON export to produce one draft proposal per role. Scrapling captures the listed job page and optional official company-context pages without credentials, redirects, proxies, or browser automation. The batch output retains blocked and eligibility-warning roles, carries a capture manifest, and reports which job terms are directly supported, transferable, or unsupported by candidate evidence. Unsupported keywords are reported as gaps and are never inserted into the CV.
+
+```json
+{"jobs": [{"id": "analyst", "company": "Example", "role": "Analyst", "job_url": "https://careers.example.com/analyst", "official_context_urls": ["https://example.com/careers"], "fallback": {"description": "Only used when official capture fails.", "source_url": "https://listing.example.com/analyst", "provider": "Example Listings", "fetched_at": "2026-08-17T00:00:00Z"}}]}
+```
+
+```bash
+ats-agent research-jobs resume.docx jobs.json --candidate-id student \
+  --evidence candidate-projects.md \
+  --context-url https://example.com/careers \
+  --out runs/analyst-batch
+```
+
+Career-Ops Markdown remains a backward-compatible, read-only input; processed rows and tracker data are not changed:
+
+```bash
+ats-agent research-jobs /path/to/career-ops/cv.md /path/to/career-ops/data/pipeline.md \
+  --candidate-id student --out runs/career-ops-batch
+```
+
+Pending rows use Career-Ops' existing `- [ ] URL | Company | Role` format. AI Job Search remains the system for job discovery and ranking; `ats-agent` remains the approval-gated CV engine. Aggregator fallback content is visibly labelled non-official and is never presented as employer-confirmed. Public-job proposals record a liveness timestamp and must be refreshed after seven days before apply.
+
 It does **not** invent qualifications, autonomously submit applications, or claim a universal ATS score, interview probability, or employer-acceptance probability.
 
 ## Release status
 
-The trustworthy v1 engineering line is prepared as `1.0.0b2`. Beta publication is fail-closed: the branch must pass CI, security, Benchmark v3, cross-platform compatibility, clean-wheel installation, and a protected 60-case private holdout before the `v1.0.0-beta.2` tag can publish a GitHub prerelease.
+The trustworthy v1 engineering line is prepared as `1.0.0b3`. Beta publication is fail-closed: the branch must pass CI, security, Benchmark v3, cross-platform compatibility, clean-wheel installation, and a protected 60-case private holdout before the `v1.0.0-beta.3` tag can publish a GitHub prerelease.
 
 ## Agent entry points
 
 ### Standalone CLI
 
-Install a pinned release with `uv tool install "tailoring-ats-cvs[documents]==1.0.0b2"`, then use `ats-agent doctor --strict`.
+Install a pinned release with `uv tool install "tailoring-ats-cvs[documents]==1.0.0b3"`, then use `ats-agent doctor --strict`.
 
 ### Claude Code
 
@@ -38,7 +62,7 @@ The active upgrade is ordinary, reviewable source code. CI rejects encoded sourc
 - canonical proposal digest and explicit digest-bound approval manifests
 - full and redacted Markdown/HTML review bundles
 - transactional TXT/Markdown/DOCX apply with source-overwrite and existing-output protection
-- DOCX preserve/rebuild modes, post-write reparse, diff, hashes, and applied-change receipts
+- DOCX preserve, strict-preserve, and rebuild modes, post-write reparse, diff, hashes, and applied-change receipts
 - Benchmark v3 public, adversarial, document, smoke, and human-evaluation queue infrastructure
 - Python 3.10–3.13 compatibility on Linux and Windows
 - dependency audit, Bandit, CodeQL, dependency review, secret-pattern scan, and CycloneDX SBOM generation
@@ -69,7 +93,7 @@ Build deterministic release bundles with:
 python scripts/build_agent_bundles.py --output dist/agent-adapters
 ```
 
-The bootstrap reference is pinned to the `v1.0.0-beta.2` release tag, not a moving branch. After installation, verify `ats-agent doctor --strict`.
+The bootstrap reference is pinned to the `v1.0.0-beta.3` release tag, not a moving branch. After installation, verify `ats-agent doctor --strict`.
 
 ## End-to-end workflow
 

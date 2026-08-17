@@ -83,6 +83,29 @@ TERM_ALIASES: dict[str, tuple[str, ...]] = {
     ),
     "data analysis": ("data analysis", "analytics", "business analysis"),
     "testing": ("testing", "tests", "test suite", "end-to-end", "e2e"),
+    "tool use": ("tool use", "tool-use", "using tools"),
+    "knowledge integration": ("knowledge integration", "sop integration", "sops"),
+    "conversation strategy": ("conversation strategy", "conversation design"),
+    "evaluation design": ("evaluation design", "evaluation framework"),
+    "a/b testing": ("a/b testing", "ab testing", "a b testing"),
+    "user research": ("user research", "usability research"),
+    "usability": ("usability", "user experience"),
+    "roadmap": ("roadmap", "product roadmap"),
+    "backlog": ("backlog", "product backlog"),
+    "proof of concept": ("proof of concept", "poc"),
+    "prototyping": ("prototyping", "prototype"),
+    "scaling": ("scaling", "scale-up", "scale up"),
+    "data annotation": ("data annotation", "annotating data"),
+    "golden datasets": ("golden datasets", "golden dataset"),
+    "ai response quality": ("ai response quality", "response quality"),
+    "user feedback": ("user feedback", "customer feedback"),
+    "root cause analysis": ("root cause analysis", "rca"),
+    "issue tracking": ("issue tracking", "issue tracker"),
+    "dashboards": ("dashboards", "dashboard"),
+    "audits": ("audits", "audit"),
+    "product analytics": ("product analytics",),
+    "statistics": ("statistics", "statistical analysis"),
+    "fintech": ("fintech", "financial technology"),
 }
 
 PREFERRED_MARKERS = (
@@ -380,6 +403,25 @@ def extract_requirements(job_description: str) -> list[dict]:
                 )
             )
 
+        duration = re.search(
+            r"\b\d+\s*(?:-|to)\s*\d+\s*months?|\b\d+\s*months?",
+            segment,
+            re.IGNORECASE,
+        )
+        if duration and re.search(r"\b(?:available|availability)\b", segment, re.IGNORECASE):
+            requirements.append(
+                _record(
+                    kind="availability",
+                    text=segment,
+                    terms=["availability"],
+                    category="availability",
+                    importance=importance,
+                    start=start,
+                    end=end,
+                    duration=duration.group(0),
+                )
+            )
+
         for canonical, aliases in TERM_ALIASES.items():
             if any(_contains_alias(body, alias) for alias in aliases):
                 key = ("skill", (canonical,), start)
@@ -401,6 +443,45 @@ def extract_requirements(job_description: str) -> list[dict]:
     for index, requirement in enumerate(requirements, 1):
         requirement["id"] = f"R{index}"
     return requirements
+
+
+def merge_requirements(
+    extracted: Iterable[dict],
+    sourced_additions: Iterable[dict],
+) -> list[dict]:
+    """Merge captured-source dossier clauses without inventing requirements."""
+
+    merged = [dict(item) for item in extracted]
+    seen = {
+        " ".join(re.findall(r"[a-z0-9]+", str(item.get("text", "")).lower())): item
+        for item in merged
+    }
+    for addition in sourced_additions:
+        text = str(addition.get("text") or "")
+        key = " ".join(re.findall(r"[a-z0-9]+", text.lower()))
+        if not key:
+            continue
+        if key in seen:
+            seen[key].update(
+                {
+                    field: value
+                    for field, value in addition.items()
+                    if field
+                    in {
+                        "source_url",
+                        "capture_sha256",
+                        "source_type",
+                        "source_excerpt",
+                        "dossier_source",
+                    }
+                }
+            )
+            continue
+        merged.append(dict(addition))
+        seen[key] = merged[-1]
+    for index, requirement in enumerate(merged, 1):
+        requirement["id"] = f"R{index}"
+    return merged
 
 
 def _extract_country(segment: str) -> str | None:
@@ -454,6 +535,10 @@ def _term_category(term: str) -> str:
         "gcp",
         "testing",
         "retrieval-augmented generation",
+        "a/b testing",
+        "data annotation",
+        "golden datasets",
+        "statistics",
     }
     return "technical" if term in technical else "capability"
 

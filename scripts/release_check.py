@@ -13,7 +13,7 @@ from ats_agent import __version__
 from ats_agent.benchmark import run
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "1.0.0b2"
+EXPECTED_VERSION = "1.0.0b3"
 
 
 def _run(*command: str) -> None:

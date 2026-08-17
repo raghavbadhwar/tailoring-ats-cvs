@@ -1,0 +1,12 @@
+{
+  "resume": "EDUCATION\nBachelor of Commerce, CGPA 8.55.\nPROJECTS\n- Built Python and SQL analysis for Tender Export OS.\nSKILLS\nPython, SQL, Excel, Figma, Canva\n",
+  "supporting_evidence": "Candidate profile records CGPA 8.82.\n- Built Python / SQL analysis for Tender Export OS.\n",
+  "zurich_job": "Work with cross-functional teams to discover, develop, and implement AI tools. Conduct user research, manage a roadmap and backlog, and be available for 6-12 months.",
+  "tiktok_job": "Current undergraduate or master's students should use SQL and A/B testing to evaluate AI agents and conversation strategy.",
+  "cheq_fallback": {
+    "description": "Annotate data, evaluate AI response quality, maintain golden datasets, analyse feedback and RCA, use dashboards, spreadsheets, SQL, statistics, and fintech context.",
+    "source_url": "https://listing.example.test/cheq",
+    "provider": "Sanitized Listing Provider",
+    "fetched_at": "2026-08-17T00:00:00Z"
+  }
+}

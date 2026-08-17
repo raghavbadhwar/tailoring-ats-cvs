@@ -8,7 +8,9 @@ import re
 from pathlib import Path
 from typing import Any, Iterable, Literal
 
-DocumentMode = Literal["preserve", "rebuild"]
+from .hashing import verify_proposal_digest
+
+DocumentMode = Literal["preserve", "strict-preserve", "rebuild"]
 REDACTED = "[redacted]"
 
 
@@ -233,6 +235,53 @@ def render_markdown(
             "",
         ]
     )
+    coverage = view.get("coverage", {})
+    if coverage:
+        baseline = coverage.get("baseline", [])
+        covered = [item for item in baseline if item.get("coverage") != "unsupported"]
+        unsupported = [item for item in baseline if item.get("coverage") == "unsupported"]
+        lines.extend(
+            [
+                "## Coverage",
+                "",
+                f"- **Baseline requirements:** {len(baseline)}",
+                f"- **Already covered requirements:** {len(covered)}",
+                f"- **Unsupported requirements:** {len(unsupported)}",
+                f"- **Proposed variants:** {len(coverage.get('proposed_variants', []))}",
+                "",
+            ]
+        )
+    recommendations = view.get("gap_recommendations", [])
+    if recommendations:
+        lines.extend(["## Ranked Evidence-Building Gaps", ""])
+        for item in recommendations:
+            quality = item.get("source_quality", {})
+            lines.append(
+                f"- **{_cell(item.get('importance', 'preferred')).upper()}** — "
+                f"{_cell(', '.join(item.get('keywords', [])))}: "
+                f"{_cell(item.get('recommendation', ''))} "
+                f"(source: {_cell(quality.get('source_type', 'unknown'))}, "
+                f"{_cell(quality.get('source_url', 'unknown'))})"
+            )
+        lines.append("")
+    conflicts = view.get("evidence_conflicts", [])
+    if conflicts:
+        lines.extend(["## Factual Conflicts", ""])
+        for conflict in conflicts:
+            lines.append(
+                f"- **UNRESOLVED** — {_cell(conflict.get('kind', 'fact'))}: "
+                "supply reconciled candidate evidence before changing this fact."
+            )
+        lines.append("")
+    duplicate_warnings = view.get("duplicate_warnings", [])
+    if duplicate_warnings:
+        lines.extend(["## Review-Only Near-Duplicates", ""])
+        for warning in duplicate_warnings:
+            lines.append(
+                f"- `{_cell(warning.get('evidence_id', 'unknown'))}` — "
+                f"{_cell(warning.get('reason', 'Review before inserting.'))}"
+            )
+        lines.append("")
     return "\n".join(lines)
 
 
@@ -340,6 +389,29 @@ def render_html(
         digest_expression = "proposalDigest"
     approval_disabled = "true" if redacted else "false"
     button_disabled = " disabled" if redacted else ""
+    coverage = view.get("coverage", {})
+    coverage_html = ""
+    if coverage:
+        baseline = coverage.get("baseline", [])
+        covered = sum(item.get("coverage") != "unsupported" for item in baseline)
+        coverage_html = (
+            "<section><h2>Coverage</h2>"
+            f"<p>Baseline: {len(baseline)} requirements; already covered: {covered}; "
+            f"unsupported: {len(baseline) - covered}; proposed variants: "
+            f"{len(coverage.get('proposed_variants', []))}.</p></section>"
+        )
+    gap_html = "".join(
+        "<li><strong>"
+        + _escape(item.get("importance", "preferred").upper())
+        + "</strong> — "
+        + _escape(", ".join(item.get("keywords", [])))
+        + ": "
+        + _escape(item.get("recommendation", ""))
+        + "</li>"
+        for item in view.get("gap_recommendations", [])
+    )
+    if gap_html:
+        gap_html = f"<section><h2>Ranked evidence-building gaps</h2><ul>{gap_html}</ul></section>"
     return f'''<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CV Tailoring Review</title><style>
@@ -353,6 +425,7 @@ pre{{white-space:pre-wrap;background:#f7f9fc;padding:10px;border-radius:8px}}sel
 <section><h2>Hard Gates</h2><ul>{gate_items}</ul></section>
 <section><h2>Requirement-to-Evidence Matrix</h2><table><thead><tr><th>Requirement</th><th>Importance</th><th>Coverage</th><th>Evidence</th></tr></thead><tbody>{''.join(rows)}</tbody></table></section>
 <section><h2>Proposed changes</h2>{''.join(cards) or '<p>No changes proposed.</p>'}</section>
+{coverage_html}{gap_html}
 <button type="button" id="download"{button_disabled}>Download approval manifest</button>
 <script>
 const proposalFile={proposal_file_json};{digest_prelude}const outputDocument={default_output_json};const approvalDisabled={approval_disabled};
@@ -376,14 +449,20 @@ def build_approval_manifest(
     output_document: str,
     document_mode: DocumentMode = "preserve",
     force: bool = False,
+    max_character_growth: int = 120,
 ) -> dict[str, Any]:
     """Validate explicit selections and return a schema-v2 manifest."""
 
+    if proposal.get("review_mode") == "redacted" or proposal.get("approval_disabled"):
+        raise ValueError("redacted reviews cannot be approved")
     if proposal.get("status") != "draft":
         raise ValueError("only a draft proposal can be approved")
+    if not isinstance(max_character_growth, int) or not 0 <= max_character_growth <= 2000:
+        raise ValueError("max_character_growth must be an integer from 0 to 2000")
     digest = str(proposal.get("proposal_digest") or "").lower()
     if re.fullmatch(r"[0-9a-f]{64}", digest) is None:
         raise ValueError("proposal has no valid proposal digest")
+    verify_proposal_digest(proposal)
     changes = {
         str(change.get("id")): change
         for change in proposal.get("changes", [])
@@ -430,6 +509,7 @@ def build_approval_manifest(
         "document_mode": document_mode,
         "output": output_document,
         "force": force,
+        "max_character_growth": max_character_growth,
     }
 
 
@@ -444,13 +524,28 @@ def write_review_bundle(
 
     output_dir = output_dir.expanduser().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-    proposal_path = output_dir / "proposal.json"
+    proposal_path = output_dir / (
+        "proposal.redacted.json" if redacted else "proposal.json"
+    )
     markdown_path = output_dir / "proposal.md"
     html_path = output_dir / "review.html"
+    persisted = _review_view(proposal, redacted=True) if redacted else proposal
     proposal_path.write_text(
-        json.dumps(_review_view(proposal, redacted=redacted), indent=2) + "\n",
+        json.dumps(persisted, indent=2) + "\n",
         encoding="utf-8",
     )
+    if not redacted:
+        try:
+            verify_proposal_digest(
+                json.loads(proposal_path.read_text(encoding="utf-8"))
+            )
+        except (ValueError, json.JSONDecodeError):
+            proposal_path.unlink(missing_ok=True)
+            (output_dir / "blocked.json").write_text(
+                json.dumps({"status": "blocked", "reason": "proposal digest verification failed"}) + "\n",
+                encoding="utf-8",
+            )
+            raise
     markdown_path.write_text(
         render_markdown(proposal, redacted=redacted),
         encoding="utf-8",

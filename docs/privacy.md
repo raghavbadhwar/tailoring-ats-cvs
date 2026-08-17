@@ -1,6 +1,6 @@
 # Privacy
 
-The default workflow is local and file-based. It does not send CVs, job descriptions, or evidence to an external service.
+The default workflow is local and file-based. It does not send CVs, job descriptions, or evidence to an external service. The optional `research-jobs` command sends only user-listed public job/context URLs to Scrapling; captured page text and all candidate files remain local. Public-page content is job/company context only and is never treated as candidate evidence.
 
 Recommended practices:
 

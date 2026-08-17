@@ -7,6 +7,10 @@ requirement mapping, rewriting, approval, document application, and validation.
 Do not recreate those behaviours in a Claude or Codex adapter.
 In plain terms, ats-agent is the source of truth.
 
+Read [agent.md](agent.md) for the operating contract and [soul.md](soul.md) for
+the durable judgement principles behind it.  They refine this repository's
+agent behaviour; this file remains the implementation instruction source.
+
 ## Required workflow
 
 1. PROPOSE: run `ats-agent prepare`; do not edit the CV.

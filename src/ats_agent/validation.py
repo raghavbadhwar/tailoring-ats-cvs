@@ -114,8 +114,25 @@ def _tokens(text: str) -> set[str]:
 
 def _normalized_text(text: str) -> str:
     return " ".join(
-        re.findall(r"[a-z0-9%+#.-]+", text.lower())
+        re.findall(r"[a-z0-9]+", text.lower())
     ).strip()
+
+
+def near_duplicate_cv_lines(text: str, resume_text: str) -> list[str]:
+    """Return conservative near-duplicates for review; callers must not insert them."""
+
+    target = set(_normalized_text(text).split())
+    if len(target) < 4:
+        return []
+    warnings: list[str] = []
+    for line in resume_text.splitlines():
+        candidate = set(_normalized_text(line).split())
+        if not candidate or candidate == target:
+            continue
+        similarity = len(target & candidate) / len(target | candidate)
+        if similarity >= 0.8:
+            warnings.append(line.strip())
+    return warnings
 
 
 def _source_evidence_matches(
@@ -206,7 +223,12 @@ def _validate_metric_bindings(
         )
 
 
-def validate_change(change: dict, ledger: EvidenceLedger) -> None:
+def validate_change(
+    change: dict,
+    ledger: EvidenceLedger,
+    *,
+    resume_text: str | None = None,
+) -> None:
     change_id = change.get("id", "<unknown>")
     if not change.get("supported"):
         raise ValueError(f"change {change_id} is unsupported")
@@ -233,8 +255,23 @@ def validate_change(change: dict, ledger: EvidenceLedger) -> None:
         raise ValueError(f"change {change_id} has no exact expected text")
     if operation != "delete_span" and not replacement:
         raise ValueError(f"change {change_id} has no replacement text")
-    if operation in {"replace", "replace_span"} and expected == replacement:
+    if operation in {"replace", "replace_span"} and (
+        expected == replacement
+        or _normalized_text(expected) == _normalized_text(replacement)
+    ):
         raise ValueError(f"change {change_id} is a no-op")
+    if resume_text and operation != "delete_span":
+        normalized_replacement = _normalized_text(replacement)
+        normalized_expected = _normalized_text(expected)
+        existing = {
+            _normalized_text(line)
+            for line in resume_text.splitlines()
+            if _normalized_text(line) and _normalized_text(line) != normalized_expected
+        }
+        if normalized_replacement in existing:
+            raise ValueError(
+                f"change {change_id} duplicates existing CV text"
+            )
     if operation in {"replace", "replace_span", "delete_span"}:
         if not _source_evidence_matches(expected, evidence):
             raise ValueError(
