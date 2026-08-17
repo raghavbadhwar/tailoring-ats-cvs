@@ -472,8 +472,6 @@ def main(argv: list[str] | None = None) -> int:
             payload = _write_approval(args)
         elif args.command in {"audit", "propose"}:
             payload = _proposal_from_args(args)
-            if args.command == "audit" and payload.get("status") == "draft":
-                payload["status"] = "ready"
             if args.command == "propose" and args.output:
                 _write_json(Path(args.output), payload)
         elif args.command == "prepare":
