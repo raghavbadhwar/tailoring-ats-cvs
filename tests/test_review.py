@@ -115,7 +115,7 @@ class ReviewReportTests(unittest.TestCase):
         self.assertIn("C2", report)
         self.assertIn("Unsupported", report)
 
-    def test_html_is_self_contained_escaped_and_only_supports_safe_approval(self):
+    def test_html_is_decision_first_and_only_supports_safe_approval(self):
         proposal = self.proposal()
         proposal["changes"][0]["expected_text"] = "<script>alert('x')</script>"
         report = render_html(
@@ -128,7 +128,16 @@ class ReviewReportTests(unittest.TestCase):
         self.assertIn('data-change-id="C1"', report)
         self.assertIn('value="C1"', report)
         self.assertIn('data-change-id="C2"', report)
-        self.assertIn("disabled", report)
+        self.assertNotIn('value="C2"', report)
+        self.assertIn("Decision summary", report)
+        self.assertIn("Selectable supported changes (1)", report)
+        self.assertIn("Unavailable changes (1)", report)
+        self.assertIn("No candidate evidence supports this requirement.", report)
+        self.assertIn("<details><summary>Requirement-to-Evidence Matrix", report)
+        self.assertIn("<details><summary>Gap details</summary>", report)
+        self.assertLess(report.index('value="C1"'), report.index("<details>"))
+        self.assertIn("schema-v2 approval manifest", report)
+        self.assertIn("does not approve, apply, or modify the source CV", report)
         self.assertIn("approval-manifest.json", report)
         self.assertNotIn("http://", report)
         self.assertNotIn("https://", report)

@@ -337,6 +337,12 @@ def main(argv: list[str] | None = None) -> int:
         help="official public HTTPS context URL applied to each job; repeatable",
     )
     research.add_argument(
+        "--job-id",
+        action="append",
+        default=None,
+        help="stable legacy import job ID to capture; repeatable",
+    )
+    research.add_argument(
         "--rewrite-command",
         action="append",
         default=[],
@@ -503,6 +509,7 @@ def main(argv: list[str] | None = None) -> int:
                 evidence_paths=[Path(path) for path in args.evidence],
                 context_urls=args.context_url,
                 provider=provider,
+                selected_job_ids=args.job_id,
             )
         else:
             payload = apply_manifest(Path(args.approval_manifest))
