@@ -26,6 +26,18 @@ ats-agent research-jobs /path/to/career-ops/cv.md /path/to/career-ops/data/pipel
 
 Pending rows use Career-Ops' existing `- [ ] URL | Company | Role` format. AI Job Search remains the system for job discovery and ranking; `ats-agent` remains the approval-gated CV engine. Aggregator fallback content is visibly labelled non-official and is never presented as employer-confirmed. Public-job proposals record a liveness timestamp and must be refreshed after seven days before apply.
 
+Use the existing AI Job Search discovery workspace first, including its existing
+low-volume public LinkedIn skill when relevant. Retain roles, keep its export
+and tracker read-only, and pass its unfiltered export to `ats-agent`.
+
+For a role-relevant unsupported gap, ask the candidate neutrally whether they
+genuinely did the activity. A bare yes never becomes CV text. After yes,
+require a confirmed activity plus setting or timeframe, write the truthful
+response as a candidate-owned supplemental evidence artifact in the run
+directory, and rebuild a draft with the existing `--evidence` option. The
+source CV is not edited and the rebuilt draft still needs explicit approval
+before apply.
+
 It does **not** invent qualifications, autonomously submit applications, or claim a universal ATS score, interview probability, or employer-acceptance probability.
 
 ## Release status

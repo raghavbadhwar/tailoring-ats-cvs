@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ipaddress
+import hashlib
 import json
 import re
 import shutil
@@ -19,6 +20,8 @@ from .workflow import build_proposal, finalize_proposal
 
 MAX_JOBS = 20
 MAX_CONTEXT_URLS = 4
+LEGACY_SCHEMA_VERSIONS = {1}
+GENERIC_GAP_CATEGORIES = {"eligibility", "education", "availability"}
 
 
 def _clean_capture(text: str) -> str:
@@ -97,6 +100,169 @@ def _public_url(value: object) -> str:
     return value
 
 
+def _hostname(value: str) -> str | None:
+    """Return a normalized hostname, never a suffix or subdomain match."""
+
+    try:
+        parsed = urlsplit(f"https://{value}")
+        if (
+            not parsed.hostname
+            or parsed.username
+            or parsed.password
+            or parsed.port
+            or parsed.path not in {"", "/"}
+            or parsed.query
+            or parsed.fragment
+        ):
+            return None
+        return parsed.hostname.rstrip(".").encode("idna").decode("ascii").casefold()
+    except (UnicodeError, ValueError):
+        return None
+
+
+def _official_host_contract(item: dict[str, object], job_url: str) -> dict[str, str] | None:
+    """Accept only an explicit, auditable employer-host assertion."""
+
+    host = item.get("official_job_host")
+    verification_url = item.get("official_host_verification_url")
+    if not isinstance(host, str) or not isinstance(verification_url, str):
+        return None
+    normalized_host = _hostname(host.strip())
+    if normalized_host is None:
+        return None
+    try:
+        verified_url = _public_url(verification_url)
+    except ValueError:
+        return None
+    job_host = urlsplit(job_url).hostname
+    verification_host = urlsplit(verified_url).hostname
+    if not job_host or not verification_host:
+        return None
+    normalized_job_host = _hostname(job_host)
+    normalized_verification_host = _hostname(verification_host)
+    if (
+        normalized_host != normalized_job_host
+        or normalized_host != normalized_verification_host
+    ):
+        return None
+    return {
+        "official_job_host": normalized_host,
+        "official_host_verification_url": verified_url,
+    }
+
+
+def _legacy_job_id(portal: object, seen_key: str) -> str:
+    identity = f"{portal if isinstance(portal, str) else ''}\0{seen_key}"
+    return f"import-{hashlib.sha256(identity.encode('utf-8')).hexdigest()[:16]}"
+
+
+def _legacy_blocked_row(
+    *,
+    job_id: str,
+    reason: str,
+    portal: object = "",
+    seen_key: str = "",
+    original_url: object = None,
+    source_status: object = None,
+) -> dict[str, object]:
+    return {
+        "id": job_id,
+        "import_status": "blocked_import",
+        "reason": reason,
+        "discovery": {
+            "portal": portal if isinstance(portal, str) else "",
+            "original_seen_key": seen_key,
+            "original_status": source_status,
+        },
+        **({"job_url": original_url} if isinstance(original_url, str) else {}),
+    }
+
+
+def _legacy_seen_jobs(raw: dict[str, object]) -> list[dict[str, object]]:
+    """Read the legacy AI Job Search state without changing its discovery records."""
+
+    seen = raw.get("seen")
+    if not isinstance(seen, dict):
+        return [
+            _legacy_blocked_row(
+                job_id="import-invalid-seen",
+                reason="legacy AI Job Search export must contain a 'seen' object",
+            )
+        ]
+    version = raw.get("schema_version")
+    version_error = (
+        "unsupported legacy AI Job Search schema_version"
+        if version is not None
+        and (not isinstance(version, int) or isinstance(version, bool) or version not in LEGACY_SCHEMA_VERSIONS)
+        else None
+    )
+    jobs: list[dict[str, object]] = []
+    ids: set[str] = set()
+    identities: set[tuple[str, str]] = set()
+    for seen_key, row in seen.items():
+        if not isinstance(row, dict):
+            jobs.append(
+                _legacy_blocked_row(
+                    job_id=_legacy_job_id("", seen_key),
+                    reason="legacy AI Job Search row must be an object",
+                    seen_key=seen_key,
+                )
+            )
+            continue
+        portal = row.get("portal", "")
+        job_id = _legacy_job_id(portal, seen_key)
+        identity = (portal if isinstance(portal, str) else "", seen_key)
+        common = {
+            "portal": portal,
+            "seen_key": seen_key,
+            "original_url": row.get("url"),
+            "source_status": row.get("status"),
+        }
+        if version_error:
+            jobs.append(_legacy_blocked_row(job_id=job_id, reason=version_error, **common))
+            continue
+        if identity in identities or job_id in ids:
+            jobs.append(
+                _legacy_blocked_row(
+                    job_id=job_id,
+                    reason="duplicate legacy discovery identity or generated ID",
+                    **common,
+                )
+            )
+            continue
+        identities.add(identity)
+        ids.add(job_id)
+        try:
+            job_url = _public_url(row.get("url"))
+        except ValueError as exc:
+            jobs.append(_legacy_blocked_row(job_id=job_id, reason=str(exc), **common))
+            continue
+        normalized: dict[str, object] = {
+            "id": job_id,
+            "job_url": job_url,
+            "context_urls": [],
+            "source_status": "expired" if row.get("status") == "expired" else "draft",
+            "discovery": {
+                "portal": portal if isinstance(portal, str) else "",
+                "original_seen_key": seen_key,
+                "original_status": row.get("status"),
+            },
+        }
+        for source_key, target_key in (("company", "company"), ("title", "role")):
+            value = row.get(source_key)
+            if isinstance(value, str) and value.strip():
+                normalized[target_key] = value.strip()
+        if contract := _official_host_contract(row, job_url):
+            normalized["official_host_contract"] = contract
+        jobs.append(normalized)
+    return jobs or [
+        _legacy_blocked_row(
+            job_id="import-empty-seen",
+            reason="legacy AI Job Search export contains no source rows",
+        )
+    ]
+
+
 def _job_list(path: Path) -> list[dict[str, object]]:
     text = path.read_text(encoding="utf-8")
     if path.suffix.lower() in {".md", ".markdown"}:
@@ -115,6 +281,8 @@ def _job_list(path: Path) -> list[dict[str, object]]:
             raw = json.loads(text)
         except json.JSONDecodeError as exc:
             raise ValueError("job list must be valid JSON or Career-Ops Markdown") from exc
+        if isinstance(raw, dict) and ("seen" in raw or path.name == "seen_jobs.json"):
+            return _legacy_seen_jobs(raw)
         jobs = raw.get("jobs") if isinstance(raw, dict) else raw
     if not isinstance(jobs, list) or not jobs or len(jobs) > MAX_JOBS:
         raise ValueError(f"job list must contain between 1 and {MAX_JOBS} jobs")
@@ -131,16 +299,19 @@ def _job_list(path: Path) -> list[dict[str, object]]:
         )
         if not isinstance(context_urls, list) or len(context_urls) > MAX_CONTEXT_URLS:
             raise ValueError(f"context_urls must contain at most {MAX_CONTEXT_URLS} URLs")
+        job_url = _public_url(item.get("job_url"))
         normalized_job: dict[str, object] = {
-                "id": job_id,
-                "job_url": _public_url(item.get("job_url")),
-                "context_urls": [_public_url(url) for url in context_urls],
-                **{
-                    key: value.strip()
-                    for key in ("company", "role")
-                    if isinstance((value := item.get(key)), str) and value.strip()
-                },
-            }
+            "id": job_id,
+            "job_url": job_url,
+            "context_urls": [_public_url(url) for url in context_urls],
+            **{
+                key: value.strip()
+                for key in ("company", "role")
+                if isinstance((value := item.get(key)), str) and value.strip()
+            },
+        }
+        if contract := _official_host_contract(item, job_url):
+            normalized_job["official_host_contract"] = contract
         source_status = item.get("status", "draft")
         if source_status not in {"draft", "expired"}:
             raise ValueError("job status must be draft or expired")
@@ -218,6 +389,8 @@ def _keyword_coverage(proposal: dict) -> list[dict[str, object]]:
         {
             "requirement_id": requirement["id"],
             "keywords": requirement["normalized_terms"],
+            "kind": requirement["kind"],
+            "category": requirement["category"],
             "importance": requirement["importance"],
             "coverage": mappings[requirement["id"]]["coverage"],
             "evidence_ids": mappings[requirement["id"]]["evidence_ids"],
@@ -232,24 +405,89 @@ def _keyword_coverage(proposal: dict) -> list[dict[str, object]]:
 
 
 def _gap_recommendations(coverage: list[dict[str, object]]) -> list[dict[str, object]]:
-    gaps = [
-        {
-            "requirement_id": item["requirement_id"],
-            "keywords": item["keywords"],
-            "importance": item["importance"],
-            "recommendation": (
-                "Build and document genuine candidate evidence for these keywords "
-                "before adding them to the CV."
-            ),
-            "source_quality": item["source_quality"],
-        }
-        for item in coverage
-        if item["coverage"] == "unsupported"
-    ]
+    gaps_by_term: dict[str, dict[str, object]] = {}
+    for item in coverage:
+        if (
+            item.get("coverage") != "unsupported"
+            or item.get("category") in GENERIC_GAP_CATEGORIES
+        ):
+            continue
+        keywords = item.get("keywords")
+        if not isinstance(keywords, list):
+            continue
+        for keyword in keywords:
+            if not isinstance(keyword, str) or not keyword:
+                continue
+            gap = {
+                "requirement_id": item["requirement_id"],
+                "keywords": [keyword],
+                "importance": item["importance"],
+                "category": item.get("category", "capability"),
+                "recommendation": (
+                    "Build and document genuine candidate evidence for these keywords "
+                    "before adding them to the CV."
+                ),
+                "source_quality": item["source_quality"],
+            }
+            previous = gaps_by_term.get(keyword.casefold())
+            if previous is None or (
+                previous["importance"] != "mandatory"
+                and gap["importance"] == "mandatory"
+            ):
+                gaps_by_term[keyword.casefold()] = gap
+    gaps = list(gaps_by_term.values())
+
+    def sort_key(item: dict[str, object]) -> tuple[bool, bool, object, str]:
+        keywords = item.get("keywords")
+        keyword = (
+            keywords[0]
+            if isinstance(keywords, list) and keywords and isinstance(keywords[0], str)
+            else ""
+        )
+        return (
+            item["importance"] != "mandatory",
+            item.get("category") != "technical" and " " not in keyword,
+            item["requirement_id"],
+            keyword,
+        )
+
     return sorted(
         gaps,
-        key=lambda item: (item["importance"] != "mandatory", item["requirement_id"]),
+        key=sort_key,
     )
+
+
+def _write_capture_recovery(job_dir: Path, url: str, reason: str) -> Path:
+    recovery = job_dir / "capture-recovery.json"
+    recovery.write_text(
+        json.dumps(
+            {
+                "status": "blocked_capture",
+                "original_url": url,
+                "reason": reason,
+                "accepted_inputs": [
+                    {
+                        "type": "aggregator_fallback",
+                        "guidance": (
+                            "Provide a read-only fallback description with its public "
+                            "source_url, provider, and fetched_at timestamp."
+                        ),
+                    },
+                    {
+                        "type": "official_job_host_contract",
+                        "guidance": (
+                            "Provide an employer-hosted job URL plus matching "
+                            "official_job_host and official_host_verification_url."
+                        ),
+                    },
+                ],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return recovery
 
 
 def research_jobs(
@@ -261,10 +499,26 @@ def research_jobs(
     evidence_paths: Iterable[Path] | None = None,
     context_urls: Iterable[str] | None = None,
     provider: RewriteProvider | None = None,
+    selected_job_ids: Iterable[str] | None = None,
 ) -> dict[str, object]:
     """Capture public job pages, then create one approval-gated proposal per job."""
 
     jobs = _job_list(job_list.expanduser().resolve())
+    imported_jobs = [
+        job
+        for job in jobs
+        if isinstance(job.get("discovery"), dict)
+        and job.get("import_status") != "blocked_import"
+    ]
+    selected = set(selected_job_ids or [])
+    imported_ids = {str(job["id"]) for job in imported_jobs}
+    if imported_jobs and selected and not selected <= imported_ids:
+        raise ValueError("--job-id must name a valid imported job ID")
+    selected_imported_ids = (
+        selected
+        if selected_job_ids is not None
+        else {str(job["id"]) for job in imported_jobs[:MAX_JOBS]}
+    )
     evidence_paths = list(evidence_paths or [])
     batch_context_urls = [_public_url(url) for url in (context_urls or [])]
     if len(batch_context_urls) > MAX_CONTEXT_URLS:
@@ -279,6 +533,39 @@ def research_jobs(
         identity: dict[str, object] = {
             key: job[key] for key in ("company", "role") if key in job
         }
+        discovery = job.get("discovery")
+        if job.get("import_status") == "blocked_import":
+            results.append(
+                {
+                    "id": job_id,
+                    **identity,
+                    "status": "blocked_import",
+                    "lifecycle_status": "blocked_import",
+                    "warnings": [],
+                    "reason": str(job["reason"]),
+                    **({"job_url": job["job_url"]} if "job_url" in job else {}),
+                    **({"discovery": discovery} if isinstance(discovery, dict) else {}),
+                }
+            )
+            continue
+        if isinstance(discovery, dict) and job_id not in selected_imported_ids:
+            results.append(
+                {
+                    "id": job_id,
+                    **identity,
+                    "status": "imported",
+                    "lifecycle_status": "imported",
+                    "warnings": [],
+                    "job_url": job["job_url"],
+                    "reason": (
+                        "Not selected for this explicit legacy import batch."
+                        if selected_job_ids is not None
+                        else f"Not included in the default {MAX_JOBS}-job legacy import batch."
+                    ),
+                    "discovery": discovery,
+                }
+            )
+            continue
         job_dir = out / "jobs" / job_id
         job_dir.mkdir(parents=True)
         if job.get("source_status") == "expired":
@@ -287,25 +574,71 @@ def research_jobs(
                     "id": job_id,
                     **identity,
                     "status": "expired",
+                    "lifecycle_status": "expired",
+                    "warnings": [],
                     "job_url": job["job_url"],
                     "reason": "Marked expired in the read-only job export.",
+                    **({"discovery": discovery} if isinstance(discovery, dict) else {}),
                 }
             )
             continue
         try:
             research: list[dict[str, object]] = []
             job_description = job_dir / "job-description.txt"
-            try:
-                research.append(
-                    _capture(
-                        str(job["job_url"]),
-                        job_description,
-                        source_type="official_job_page",
+            capture_recovery: Path | None = None
+            source_type = "third_party_job_page"
+            contract = job.get("official_host_contract")
+            if isinstance(contract, dict):
+                verification_url = str(contract["official_host_verification_url"])
+                verification_path = job_dir / "official-host-verification.txt"
+                try:
+                    verification = _capture(
+                        verification_url,
+                        verification_path,
+                        source_type="official_company_context",
                     )
+                    verification["official_host"] = contract["official_job_host"]
+                    verification["contract_role"] = "official_host_verification"
+                    research.append(verification)
+                    source_type = "official_job_page"
+                except ValueError as exc:
+                    research.append(
+                        {
+                            "url": verification_url,
+                            "method": "scrapling_public_https",
+                            "source_type": "official_company_context",
+                            "extraction_status": "failed",
+                            "captured_at": datetime.now(timezone.utc).isoformat(),
+                            "sha256": None,
+                            "reason": str(exc),
+                            "official_host": contract["official_job_host"],
+                            "contract_role": "official_host_verification",
+                        }
+                    )
+            try:
+                capture = _capture(
+                    str(job["job_url"]), job_description, source_type=source_type
                 )
-            except ValueError as exc:
+                if isinstance(contract, dict):
+                    capture["official_host"] = contract["official_job_host"]
+                    capture["official_host_verification_url"] = contract[
+                        "official_host_verification_url"
+                    ]
+                    capture["official_host_verification_sha256"] = next(
+                        (
+                            item.get("sha256")
+                            for item in research
+                            if item.get("contract_role") == "official_host_verification"
+                        ),
+                        None,
+                    )
+                research.append(capture)
+            except (ValueError, subprocess.TimeoutExpired) as exc:
                 fallback = job.get("fallback")
                 if not isinstance(fallback, dict):
+                    capture_recovery = _write_capture_recovery(
+                        job_dir, str(job["job_url"]), str(exc)
+                    )
                     raise
                 job_description.write_text(
                     str(fallback["description"]), encoding="utf-8"
@@ -314,7 +647,7 @@ def research_jobs(
                     {
                         "url": str(job["job_url"]),
                         "method": "scrapling_public_https",
-                        "source_type": "official_job_page",
+                        "source_type": source_type,
                         "extraction_status": "failed",
                         "captured_at": datetime.now(timezone.utc).isoformat(),
                         "sha256": None,
@@ -428,6 +761,8 @@ def research_jobs(
                     **identity,
                     "status": "eligibility_warning" if eligibility else "draft",
                     "workflow_status": "draft",
+                    "lifecycle_status": "proposal_draft",
+                    "warnings": ["eligibility_warning"] if eligibility else [],
                     "job_url": job["job_url"],
                     "proposal": artifacts["proposal"],
                     "review_html": artifacts["html"],
@@ -435,6 +770,7 @@ def research_jobs(
                     "keyword_coverage": coverage,
                     "gap_recommendations": proposal["gap_recommendations"],
                     "eligibility_warnings": eligibility,
+                    **({"discovery": discovery} if isinstance(discovery, dict) else {}),
                 }
             )
         except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
@@ -443,7 +779,15 @@ def research_jobs(
                     "id": job_id,
                     **identity,
                     "status": "blocked_capture",
+                    "lifecycle_status": "blocked_capture",
+                    "warnings": [],
                     "reason": str(exc),
+                    **(
+                        {"capture_recovery": str(capture_recovery)}
+                        if "capture_recovery" in locals() and capture_recovery is not None
+                        else {}
+                    ),
+                    **({"discovery": discovery} if isinstance(discovery, dict) else {}),
                 }
             )
     payload = {"status": "draft", "job_count": len(results), "jobs": results}

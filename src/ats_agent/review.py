@@ -341,11 +341,19 @@ def render_html(
             "</tr>"
         )
 
+    supported_changes = [
+        change
+        for change in view.get("changes", [])
+        if isinstance(change, dict) and change.get("supported") and not redacted
+    ]
+    unavailable_changes = [
+        change
+        for change in view.get("changes", [])
+        if isinstance(change, dict) and change not in supported_changes
+    ]
     cards = []
-    for change in view.get("changes", []):
+    for change in supported_changes:
         change_id = str(change.get("id", "unknown"))
-        supported = bool(change.get("supported"))
-        disabled = "" if supported and not redacted else " disabled"
         variants = change.get("variants") or []
         options = "".join(
             (
@@ -364,15 +372,31 @@ def render_html(
         cards.append(
             f'<article class="change" data-change-id="{_escape(change_id)}">'
             f'<label><input type="checkbox" name="change" '
-            f'value="{_escape(change_id)}"{disabled}> '
+            f'value="{_escape(change_id)}"> '
             f"<strong>{_escape(change_id)}</strong></label>"
             f"<p>{_escape(change.get('reason', ''))}</p>"
             f"<pre>{_escape(change.get('expected_text', ''))}</pre>"
-            f'<select data-variant-for="{_escape(change_id)}"{disabled}>'
+            f'<select data-variant-for="{_escape(change_id)}">'
             f"{options}</select>"
             f"<p>Evidence: "
             f'{_escape(", ".join(str(item) for item in change.get("evidence_ids", [])) or "None")}'
             "</p></article>"
+        )
+
+    unavailable_html = "".join(
+        f'<li data-change-id="{_escape(change.get("id", "unknown"))}">'
+        f"<strong>{_escape(change.get('id', 'unknown'))}</strong> — "
+        f"{_escape(change.get('reason', 'Approval is unavailable in this review.'))}"
+        "</li>"
+        for change in unavailable_changes
+    )
+    if redacted and unavailable_changes:
+        unavailable_html = "".join(
+            f'<li data-change-id="{_escape(change.get("id", "unknown"))}">'
+            f"<strong>{_escape(change.get('id', 'unknown'))}</strong> — "
+            "Approval is disabled in this redacted review."
+            "</li>"
+            for change in unavailable_changes
         )
 
     proposal_file_json = _safe_json(proposal_filename)
@@ -411,7 +435,7 @@ def render_html(
         for item in view.get("gap_recommendations", [])
     )
     if gap_html:
-        gap_html = f"<section><h2>Ranked evidence-building gaps</h2><ul>{gap_html}</ul></section>"
+        gap_html = f"<h3>Ranked evidence-building gaps</h3><ul>{gap_html}</ul>"
     return f'''<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CV Tailoring Review</title><style>
@@ -422,10 +446,13 @@ pre{{white-space:pre-wrap;background:#f7f9fc;padding:10px;border-radius:8px}}sel
 </style></head><body>
 <h1>CV Tailoring Review</h1>
 <p class="notice"><strong>Privacy:</strong> {_escape(_privacy_notice(redacted))}<br><strong>Proposal digest:</strong> <code>{_escape(view.get('proposal_digest', ''))}</code></p>
+<section><h2>Decision summary</h2>
+<p>Selecting a supported change only downloads a schema-v2 approval manifest. It does not approve, apply, or modify the source CV.</p>
+<h3>Selectable supported changes ({len(supported_changes)})</h3>{''.join(cards) or '<p>No supported changes are available for selection.</p>'}
+<h3>Unavailable changes ({len(unavailable_changes)})</h3><p>Unavailable changes cannot be selected or applied.</p><ul>{unavailable_html or '<li>None</li>'}</ul></section>
 <section><h2>Hard Gates</h2><ul>{gate_items}</ul></section>
-<section><h2>Requirement-to-Evidence Matrix</h2><table><thead><tr><th>Requirement</th><th>Importance</th><th>Coverage</th><th>Evidence</th></tr></thead><tbody>{''.join(rows)}</tbody></table></section>
-<section><h2>Proposed changes</h2>{''.join(cards) or '<p>No changes proposed.</p>'}</section>
-{coverage_html}{gap_html}
+<details><summary>Requirement-to-Evidence Matrix ({len(rows)} requirements)</summary><table><thead><tr><th>Requirement</th><th>Importance</th><th>Coverage</th><th>Evidence</th></tr></thead><tbody>{''.join(rows)}</tbody></table></details>
+<details><summary>Gap details</summary>{coverage_html}{gap_html or '<p>No ranked evidence-building gaps.</p>'}</details>
 <button type="button" id="download"{button_disabled}>Download approval manifest</button>
 <script>
 const proposalFile={proposal_file_json};{digest_prelude}const outputDocument={default_output_json};const approvalDisabled={approval_disabled};

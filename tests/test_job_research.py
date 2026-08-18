@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from ats_agent.cli import main
 from ats_agent.hashing import verify_proposal_digest
-from ats_agent.job_research import _job_list, research_jobs
+from ats_agent.job_research import MAX_JOBS, _gap_recommendations, _job_list, research_jobs
 from ats_agent.workflow import _validate_research_freshness
 
 
@@ -51,6 +51,8 @@ class JobResearchTests(unittest.TestCase):
                 result = research_jobs(resume, jobs, root / "run", candidate_id="student")
             job = result["jobs"][0]
             self.assertEqual(job["status"], "draft")
+            self.assertEqual(job["lifecycle_status"], "proposal_draft")
+            self.assertEqual(job["warnings"], [])
             self.assertTrue((root / "run" / "manifest.json").is_file())
             self.assertTrue((root / "run" / "jobs" / "analyst" / "company-context.md").is_file())
             self.assertEqual(
@@ -64,6 +66,7 @@ class JobResearchTests(unittest.TestCase):
             )
             self.assertTrue(all(item["source_url"] == "https://jobs.example.com/analyst" for item in proposal["requirements"]))
             self.assertTrue(all(item["capture_sha256"] for item in proposal["requirements"]))
+            self.assertTrue(all(item["source_type"] == "third_party_job_page" for item in proposal["requirements"]))
             command = run.call_args.args[0]
             self.assertIn("--no-follow-redirects", command)
             self.assertIn("--no-stealthy-headers", command)
@@ -155,7 +158,7 @@ class JobResearchTests(unittest.TestCase):
             proposal = json.loads(Path(result["jobs"][0]["proposal"]).read_text(encoding="utf-8"))
             requirement = next(item for item in proposal["requirements"] if item.get("dossier_source"))
             self.assertEqual(requirement["source_excerpt"], captured)
-            self.assertEqual(requirement["source_type"], "official_job_page")
+            self.assertEqual(requirement["source_type"], "third_party_job_page")
             from ats_agent.job_research import _validate_role_dossier
 
             with self.assertRaisesRegex(ValueError, "match captured source"):
@@ -224,6 +227,166 @@ class JobResearchTests(unittest.TestCase):
                 result = research_jobs(resume, jobs, root / "run")
             self.assertEqual(result["jobs"][0]["status"], "blocked_capture")
             self.assertIn("install it separately", result["jobs"][0]["reason"])
+            recovery = json.loads(
+                Path(result["jobs"][0]["capture_recovery"]).read_text(encoding="utf-8")
+            )
+            self.assertEqual(recovery["original_url"], "https://example.com")
+            self.assertEqual(recovery["status"], "blocked_capture")
+            self.assertTrue(recovery["accepted_inputs"])
+
+    def test_legacy_seen_export_retains_invalid_rows_without_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            resume, jobs = root / "resume.txt", root / "seen_jobs.json"
+            resume.write_text("SKILLS\nPython\n", encoding="utf-8")
+            payload = {
+                "seen": {
+                    "linkedin-good": {
+                        "title": "Data Analyst",
+                        "company": "Example Co",
+                        "url": "https://www.linkedin.com/jobs/view/123",
+                        "portal": "linkedin",
+                        "status": "ranked",
+                    },
+                    "unsafe": {
+                        "title": "Unsafe",
+                        "url": "http://unsafe.example.com/private",
+                        "portal": "linkedin",
+                    },
+                    "malformed": ["not a job object"],
+                }
+            }
+            jobs.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+            before = jobs.read_bytes()
+            with patch("ats_agent.job_research.socket.getaddrinfo", self._resolver), patch(
+                "ats_agent.job_research.shutil.which", return_value="/usr/bin/scrapling"
+            ), patch("ats_agent.job_research.subprocess.run", side_effect=self._scrapling):
+                result = research_jobs(resume, jobs, root / "run")
+
+            self.assertEqual(jobs.read_bytes(), before)
+            self.assertEqual(result["job_count"], 3)
+            good, unsafe, malformed = result["jobs"]
+            self.assertEqual(good["id"], _job_list(jobs)[0]["id"])
+            self.assertEqual(good["discovery"]["portal"], "linkedin")
+            self.assertEqual(good["status"], "draft")
+            self.assertEqual(unsafe["status"], "blocked_import")
+            self.assertEqual(malformed["status"], "blocked_import")
+            self.assertNotIn("job_url", malformed)
+
+    def test_legacy_export_missing_seen_is_a_visible_import_block(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            jobs = Path(directory) / "seen_jobs.json"
+            jobs.write_text("{}", encoding="utf-8")
+            imported = _job_list(jobs)
+        self.assertEqual(imported[0]["import_status"], "blocked_import")
+        self.assertIn("'seen' object", str(imported[0]["reason"]))
+
+    def test_legacy_import_caps_default_capture_and_allows_explicit_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            resume, jobs = root / "resume.txt", root / "seen_jobs.json"
+            resume.write_text("SKILLS\nPython\n", encoding="utf-8")
+            jobs.write_text(
+                json.dumps(
+                    {
+                        "seen": {
+                            f"role-{index}": {
+                                "title": f"Role {index}",
+                                "company": "Example Co",
+                                "url": f"https://www.linkedin.com/jobs/view/{index}",
+                                "portal": "linkedin",
+                            }
+                            for index in range(MAX_JOBS + 1)
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            selected = [job["id"] for job in _job_list(jobs)]
+            with patch("ats_agent.job_research.socket.getaddrinfo", self._resolver), patch(
+                "ats_agent.job_research.shutil.which", return_value="/usr/bin/scrapling"
+            ), patch("ats_agent.job_research.subprocess.run", side_effect=self._scrapling) as capture:
+                default = research_jobs(resume, jobs, root / "default")
+
+            self.assertEqual(capture.call_count, MAX_JOBS)
+            self.assertEqual(default["job_count"], MAX_JOBS + 1)
+            self.assertEqual(default["jobs"][-1]["lifecycle_status"], "imported")
+            self.assertIn("default", default["jobs"][-1]["reason"])
+
+            with patch("ats_agent.job_research.socket.getaddrinfo", self._resolver), patch(
+                "ats_agent.job_research.shutil.which", return_value="/usr/bin/scrapling"
+            ), patch("ats_agent.job_research.subprocess.run", side_effect=self._scrapling) as capture:
+                explicit = research_jobs(
+                    resume, jobs, root / "explicit", selected_job_ids=selected
+                )
+
+            self.assertEqual(capture.call_count, MAX_JOBS + 1)
+            self.assertTrue(all(job["lifecycle_status"] == "proposal_draft" for job in explicit["jobs"]))
+
+    def test_official_provenance_requires_matching_job_and_verification_hosts(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            resume, jobs = root / "resume.txt", root / "jobs.json"
+            resume.write_text("SKILLS\nPython\n", encoding="utf-8")
+            jobs.write_text(
+                json.dumps(
+                    [
+                        {
+                            "id": "official",
+                            "job_url": "https://jobs.example.com/role",
+                            "official_job_host": "jobs.example.com",
+                            "official_host_verification_url": "https://jobs.example.com/careers",
+                        },
+                        {
+                            "id": "mismatch",
+                            "job_url": "https://www.linkedin.com/jobs/view/123",
+                            "official_job_host": "jobs.example.com",
+                            "official_host_verification_url": "https://jobs.example.com/careers",
+                        },
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            with patch("ats_agent.job_research.socket.getaddrinfo", self._resolver), patch(
+                "ats_agent.job_research.shutil.which", return_value="/usr/bin/scrapling"
+            ), patch("ats_agent.job_research.subprocess.run", side_effect=self._scrapling):
+                result = research_jobs(resume, jobs, root / "run")
+
+            official = json.loads(Path(result["jobs"][0]["proposal"]).read_text(encoding="utf-8"))
+            mismatch = json.loads(Path(result["jobs"][1]["proposal"]).read_text(encoding="utf-8"))
+            self.assertTrue(all(item["source_type"] == "official_job_page" for item in official["requirements"]))
+            self.assertTrue(all(item["source_type"] == "third_party_job_page" for item in mismatch["requirements"]))
+
+    def test_gap_recommendations_deduplicate_and_exclude_generic_gates(self) -> None:
+        coverage = [
+            {
+                "requirement_id": "R2",
+                "keywords": ["python"],
+                "category": "technical",
+                "importance": "preferred",
+                "coverage": "unsupported",
+                "source_quality": {},
+            },
+            {
+                "requirement_id": "R1",
+                "keywords": ["python", "golden datasets"],
+                "category": "technical",
+                "importance": "mandatory",
+                "coverage": "unsupported",
+                "source_quality": {},
+            },
+            {
+                "requirement_id": "R3",
+                "keywords": ["work authorization", "master", "remote", "professional experience"],
+                "category": "eligibility",
+                "importance": "mandatory",
+                "coverage": "unsupported",
+                "source_quality": {},
+            },
+        ]
+        gaps = _gap_recommendations(coverage)
+        self.assertEqual([gap["keywords"] for gap in gaps], [["golden datasets"], ["python"]])
+        self.assertEqual([gap["requirement_id"] for gap in gaps], ["R1", "R1"])
 
     def test_expired_and_eligibility_warning_rows_remain_visible(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -237,6 +400,34 @@ class JobResearchTests(unittest.TestCase):
             with patch("ats_agent.job_research.socket.getaddrinfo", self._resolver):
                 result = research_jobs(resume, jobs, root / "run")
             self.assertEqual(result["jobs"][0]["status"], "expired")
+            self.assertEqual(result["jobs"][0]["lifecycle_status"], "expired")
+
+    def test_eligibility_warning_is_a_warning_not_a_lifecycle_state(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            resume, jobs = root / "resume.txt", root / "jobs.json"
+            resume.write_text("SKILLS\nPython\n", encoding="utf-8")
+            jobs.write_text(
+                '[{"job_url": "https://jobs.example.com/role"}]', encoding="utf-8"
+            )
+            with patch("ats_agent.job_research.socket.getaddrinfo", self._resolver), patch(
+                "ats_agent.job_research.shutil.which", return_value="/usr/bin/scrapling"
+            ), patch(
+                "ats_agent.job_research.subprocess.run",
+                side_effect=lambda command, **_kwargs: (
+                    Path(command[4]).write_text(
+                        "Python is required. Candidates must be authorized to work in India.",
+                        encoding="utf-8",
+                    ),
+                    SimpleNamespace(returncode=0, stdout="", stderr=""),
+                )[1],
+            ):
+                result = research_jobs(resume, jobs, root / "run")
+
+            job = result["jobs"][0]
+            self.assertEqual(job["status"], "eligibility_warning")
+            self.assertEqual(job["lifecycle_status"], "proposal_draft")
+            self.assertEqual(job["warnings"], ["eligibility_warning"])
 
     def test_stale_research_cannot_be_applied_without_refresh(self) -> None:
         with self.assertRaisesRegex(ValueError, "stale"):
@@ -261,4 +452,5 @@ class JobResearchTests(unittest.TestCase):
                 evidence_paths=[],
                 context_urls=[],
                 provider=None,
+                selected_job_ids=None,
             )
