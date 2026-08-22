@@ -22,5 +22,7 @@ class AgentRepositoryContractTests(unittest.TestCase):
         self.assertIn("scripts/run_cli.py", body)
         self.assertIn("CODEX_HOME", body)
         self.assertIn("explicit approval", body.lower())
+        self.assertIn("## Chat-first output", body)
+        self.assertIn("Do not require the candidate to open JSON", body)
         for path in ("references/approval-policy.md", "references/cli-contract.md", "references/installation.md", "references/proposal-fields.md", "references/troubleshooting.md", "scripts/ensure_cli.py", "scripts/run_cli.py", "scripts/summarize_proposal.py", "assets/bootstrap-policy.json"):
             self.assertTrue((skill.parent / path).is_file(), path)
