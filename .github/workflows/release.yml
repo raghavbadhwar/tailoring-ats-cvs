@@ -117,7 +117,6 @@ jobs:
           fi
           gh release delete "$GITHUB_REF_NAME" --yes 2>/dev/null || true
           gh release create "$GITHUB_REF_NAME" \
-            dist/*.whl dist/*.tar.gz dist/agent-adapters/* sbom.cdx.json SHA256SUMS release-check.json benchmarks/v3/reports/*.json \
             --repo "$GITHUB_REPOSITORY" \
             --title "Trustworthy CV Tailoring v1.0.0-beta.3" \
             --notes "Approval-first beta. Includes reproducible package artifacts, SBOM, checksums, public benchmark reports, and release-gate verification metadata. No universal ATS or employer-acceptance claims are made.
@@ -125,6 +124,10 @@ jobs:
           $HOLDOUT_NOTE" \
             --prerelease \
             --verify-tag
+          gh release upload "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber \
+            dist/*.whl dist/*.tar.gz dist/agent-adapters/* sbom.cdx.json SHA256SUMS release-check.json benchmarks/v3/reports/*.json
   publish-pypi:
     needs: release
     runs-on: ubuntu-latest
