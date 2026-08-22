@@ -36,6 +36,14 @@ Run `python "$SKILL_DIR/scripts/ensure_cli.py" --check`.
 
 ## 3. Propose (read-only)
 
+Preferred fast path when the host supports it:
+
+```sh
+python "$SKILL_DIR/scripts/run_cli.py" -- tailor "<cv>" "<jd-or-urls>"   --candidate-id "<id>" [--evidence <evidence>...]   --run-dir "<run-dir>" --approve-from <approvals.json>
+```
+
+Otherwise use the granular flow:
+
 Create a fresh run directory under the user's project (never inside the
 plugin). Then:
 

@@ -4,18 +4,15 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import re
 import zipfile
 from pathlib import Path
 
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _release_version import display_version, package_version
+
 FIXED_TIME = (1980, 1, 1, 0, 0, 0)
-
-
-def _version(root: Path) -> str:
-    match = re.search(r'^version\s*=\s*"([^"]+)"', (root / "pyproject.toml").read_text(encoding="utf-8"), re.MULTILINE)
-    if match is None:
-        raise ValueError("project version not found")
-    return match.group(1)
 
 
 def _write(archive: zipfile.ZipFile, name: str, source: Path, executable: bool = False) -> None:
@@ -37,15 +34,17 @@ def _archive(destination: Path, root: Path, files: list[Path], prefix: str) -> N
 
 
 def build_bundles(root: Path, output: Path) -> list[Path]:
-    version = _version(root)
-    if version != "1.0.0b4":
-        raise ValueError("agent adapter release expects 1.0.0b4")
+    version = package_version(root)
+    display = display_version(version)
     manifest = json.loads((root / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))
-    if manifest.get("version") != "1.0.0-beta.4":
-        raise ValueError("plugin version does not match package version")
+    if manifest.get("version") != display:
+        raise ValueError(
+            f"plugin manifest version {manifest.get('version')!r} does not match "
+            f"package {version!r} (display {display!r})"
+        )
     output.mkdir(parents=True, exist_ok=True)
-    skill = output / "tailor-cv-agent-skill-v1.0.0-beta.4.zip"
-    plugin = output / "tailoring-ats-cvs-claude-plugin-v1.0.0-beta.4.zip"
+    skill = output / f"tailor-cv-agent-skill-v{display}.zip"
+    plugin = output / f"tailoring-ats-cvs-claude-plugin-v{display}.zip"
     _archive(skill, root / ".agents/skills", list((root / ".agents/skills/tailor-cv").rglob("*")), "")
     files = [path for path in (root / ".agents").rglob("*") if path.is_file()]
     files += [root / ".claude-plugin/plugin.json", root / "bin/ats-cv", root / "bin/ats-cv.cmd"]

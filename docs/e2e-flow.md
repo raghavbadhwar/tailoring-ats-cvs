@@ -9,7 +9,8 @@ not aspirations.
 
 ```mermaid
 flowchart TD
-    Start(["Candidate starts tailor-cv<br/>(Claude /plugin, Codex skill, or CLI)"]) --> Eng{"ats-agent engine ready?"}
+    Start(["Candidate starts tailor-cv<br/>(Claude /plugin, Codex skill, or CLI)"]) --> Door{"One door:<br/>ats-agent tailor<br/>(JD file · posting URL · ATS board · URL list)"}
+    Door --> Eng{"ats-agent engine ready?"}
     Eng -- "no" --> Consent["ONE consent prompt:<br/>install engine via ordered chain<br/>PyPI → pinned GitHub tag → isolated venv"]
     Consent --> Doctor["doctor --strict verification<br/>+ install-state manifest"]
     Doctor --> Ready
@@ -27,7 +28,11 @@ flowchart TD
     Refused --> Summary
     Summary --> Approve{"Explicit approval?<br/>user names each change:variant"}
     Approve -- "none / refusal" --> Untouched(["Nothing changed.<br/>Source CV untouched"])
-    Approve -- "yes — named subset only" --> Apply["7 · APPLY<br/>temp write → reparse → verify →<br/>atomic rename (source CV preserved)"]
+    Approve -- "yes — named subset only" --> Live{"Posting still live?<br/>(URL-sourced drafts)"}
+    Live -- "dead" --> Dead["Blocked: nothing applied"]
+    Live -- "changed / infra" --> Warn["⚠ warn (confirm if interactive)"]
+    Warn --> Apply["7 · APPLY<br/>temp write → reparse → verify →<br/>atomic rename (source CV preserved)"]
+    Live -- "same" --> Apply
     Apply --> Validate["8 · VALIDATE<br/>applied-change receipts · layout audit"]
     Validate --> Out(["Tailored CV delivered<br/>+ receipts and review bundle"])
 ```

@@ -45,9 +45,9 @@ class JobResearchTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            with patch("ats_agent.job_research.socket.getaddrinfo", self._resolver), patch(
-                "ats_agent.job_research.shutil.which", return_value="/usr/bin/scrapling"
-            ), patch("ats_agent.job_research.subprocess.run", side_effect=self._scrapling) as run:
+            with patch.dict(__import__("os").environ, {"ATS_CAPTURE_FAST_PACE": "1"}), patch("ats_agent.job_research.socket.getaddrinfo", self._resolver), patch(
+                "ats_agent.capture.shutil.which", return_value="/usr/bin/scrapling"
+            ), patch("ats_agent.capture.subprocess.run", side_effect=self._scrapling) as run:
                 result = research_jobs(resume, jobs, root / "run", candidate_id="student")
             job = result["jobs"][0]
             self.assertEqual(job["status"], "draft")
@@ -109,10 +109,10 @@ class JobResearchTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            with patch("ats_agent.job_research.socket.getaddrinfo", self._resolver), patch(
-                "ats_agent.job_research.shutil.which", return_value="/usr/bin/scrapling"
+            with patch.dict(__import__("os").environ, {"ATS_CAPTURE_FAST_PACE": "1"}), patch("ats_agent.job_research.socket.getaddrinfo", self._resolver), patch(
+                "ats_agent.capture.shutil.which", return_value="/usr/bin/scrapling"
             ), patch(
-                "ats_agent.job_research.subprocess.run",
+                "ats_agent.capture.subprocess.run",
                 return_value=SimpleNamespace(returncode=1, stdout="", stderr="empty capture"),
             ):
                 result = research_jobs(resume, jobs, root / "run")
@@ -145,10 +145,10 @@ class JobResearchTests(unittest.TestCase):
                 }]),
                 encoding="utf-8",
             )
-            with patch("ats_agent.job_research.socket.getaddrinfo", self._resolver), patch(
-                "ats_agent.job_research.shutil.which", return_value="/usr/bin/scrapling"
+            with patch.dict(__import__("os").environ, {"ATS_CAPTURE_FAST_PACE": "1"}), patch("ats_agent.job_research.socket.getaddrinfo", self._resolver), patch(
+                "ats_agent.capture.shutil.which", return_value="/usr/bin/scrapling"
             ), patch(
-                "ats_agent.job_research.subprocess.run",
+                "ats_agent.capture.subprocess.run",
                 side_effect=lambda command, **_kwargs: (
                     Path(command[4]).write_text(captured, encoding="utf-8"),
                     SimpleNamespace(returncode=0, stdout="", stderr=""),
@@ -193,9 +193,9 @@ class JobResearchTests(unittest.TestCase):
 """,
                 encoding="utf-8",
             )
-            with patch("ats_agent.job_research.socket.getaddrinfo", self._resolver), patch(
-                "ats_agent.job_research.shutil.which", return_value="/usr/bin/scrapling"
-            ), patch("ats_agent.job_research.subprocess.run", side_effect=self._scrapling):
+            with patch.dict(__import__("os").environ, {"ATS_CAPTURE_FAST_PACE": "1"}), patch("ats_agent.job_research.socket.getaddrinfo", self._resolver), patch(
+                "ats_agent.capture.shutil.which", return_value="/usr/bin/scrapling"
+            ), patch("ats_agent.capture.subprocess.run", side_effect=self._scrapling):
                 result = research_jobs(resume, jobs, root / "run")
 
             self.assertEqual(result["job_count"], 2)
@@ -221,8 +221,8 @@ class JobResearchTests(unittest.TestCase):
             resume = root / "resume.txt"
             resume.write_text("Python\n", encoding="utf-8")
             jobs.write_text('[{"job_url": "https://example.com"}]', encoding="utf-8")
-            with patch("ats_agent.job_research.socket.getaddrinfo", self._resolver), patch(
-                "ats_agent.job_research.shutil.which", return_value=None
+            with patch.dict(__import__("os").environ, {"ATS_CAPTURE_FAST_PACE": "1"}), patch("ats_agent.job_research.socket.getaddrinfo", self._resolver), patch(
+                "ats_agent.capture.shutil.which", return_value=None
             ):
                 result = research_jobs(resume, jobs, root / "run")
             self.assertEqual(result["jobs"][0]["status"], "blocked_capture")
@@ -258,9 +258,9 @@ class JobResearchTests(unittest.TestCase):
             }
             jobs.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
             before = jobs.read_bytes()
-            with patch("ats_agent.job_research.socket.getaddrinfo", self._resolver), patch(
-                "ats_agent.job_research.shutil.which", return_value="/usr/bin/scrapling"
-            ), patch("ats_agent.job_research.subprocess.run", side_effect=self._scrapling):
+            with patch.dict(__import__("os").environ, {"ATS_CAPTURE_FAST_PACE": "1"}), patch("ats_agent.job_research.socket.getaddrinfo", self._resolver), patch(
+                "ats_agent.capture.shutil.which", return_value="/usr/bin/scrapling"
+            ), patch("ats_agent.capture.subprocess.run", side_effect=self._scrapling):
                 result = research_jobs(resume, jobs, root / "run")
 
             self.assertEqual(jobs.read_bytes(), before)
@@ -303,9 +303,9 @@ class JobResearchTests(unittest.TestCase):
                 encoding="utf-8",
             )
             selected = [job["id"] for job in _job_list(jobs)]
-            with patch("ats_agent.job_research.socket.getaddrinfo", self._resolver), patch(
-                "ats_agent.job_research.shutil.which", return_value="/usr/bin/scrapling"
-            ), patch("ats_agent.job_research.subprocess.run", side_effect=self._scrapling) as capture:
+            with patch.dict(__import__("os").environ, {"ATS_CAPTURE_FAST_PACE": "1"}), patch("ats_agent.job_research.socket.getaddrinfo", self._resolver), patch(
+                "ats_agent.capture.shutil.which", return_value="/usr/bin/scrapling"
+            ), patch("ats_agent.capture.subprocess.run", side_effect=self._scrapling) as capture:
                 default = research_jobs(resume, jobs, root / "default")
 
             self.assertEqual(capture.call_count, MAX_JOBS)
@@ -313,9 +313,9 @@ class JobResearchTests(unittest.TestCase):
             self.assertEqual(default["jobs"][-1]["lifecycle_status"], "imported")
             self.assertIn("default", default["jobs"][-1]["reason"])
 
-            with patch("ats_agent.job_research.socket.getaddrinfo", self._resolver), patch(
-                "ats_agent.job_research.shutil.which", return_value="/usr/bin/scrapling"
-            ), patch("ats_agent.job_research.subprocess.run", side_effect=self._scrapling) as capture:
+            with patch.dict(__import__("os").environ, {"ATS_CAPTURE_FAST_PACE": "1"}), patch("ats_agent.job_research.socket.getaddrinfo", self._resolver), patch(
+                "ats_agent.capture.shutil.which", return_value="/usr/bin/scrapling"
+            ), patch("ats_agent.capture.subprocess.run", side_effect=self._scrapling) as capture:
                 explicit = research_jobs(
                     resume, jobs, root / "explicit", selected_job_ids=selected
                 )
@@ -347,9 +347,9 @@ class JobResearchTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            with patch("ats_agent.job_research.socket.getaddrinfo", self._resolver), patch(
-                "ats_agent.job_research.shutil.which", return_value="/usr/bin/scrapling"
-            ), patch("ats_agent.job_research.subprocess.run", side_effect=self._scrapling):
+            with patch.dict(__import__("os").environ, {"ATS_CAPTURE_FAST_PACE": "1"}), patch("ats_agent.job_research.socket.getaddrinfo", self._resolver), patch(
+                "ats_agent.capture.shutil.which", return_value="/usr/bin/scrapling"
+            ), patch("ats_agent.capture.subprocess.run", side_effect=self._scrapling):
                 result = research_jobs(resume, jobs, root / "run")
 
             official = json.loads(Path(result["jobs"][0]["proposal"]).read_text(encoding="utf-8"))
@@ -410,10 +410,10 @@ class JobResearchTests(unittest.TestCase):
             jobs.write_text(
                 '[{"job_url": "https://jobs.example.com/role"}]', encoding="utf-8"
             )
-            with patch("ats_agent.job_research.socket.getaddrinfo", self._resolver), patch(
-                "ats_agent.job_research.shutil.which", return_value="/usr/bin/scrapling"
+            with patch.dict(__import__("os").environ, {"ATS_CAPTURE_FAST_PACE": "1"}), patch("ats_agent.job_research.socket.getaddrinfo", self._resolver), patch(
+                "ats_agent.capture.shutil.which", return_value="/usr/bin/scrapling"
             ), patch(
-                "ats_agent.job_research.subprocess.run",
+                "ats_agent.capture.subprocess.run",
                 side_effect=lambda command, **_kwargs: (
                     Path(command[4]).write_text(
                         "Python is required. Candidates must be authorized to work in India.",

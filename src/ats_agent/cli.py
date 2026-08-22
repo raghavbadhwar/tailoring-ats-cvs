@@ -5,12 +5,12 @@ import argparse
 import json
 import os
 import sys
-import tempfile
-from importlib.util import find_spec
 from pathlib import Path
 
 from . import __version__
 from .summary import render_proposal_summary
+from .doctor import _doctor, _strict_doctor_check  # noqa: F401 - re-exported contract
+from .orchestrator import TailorBlocked, tailor as _run_tailor
 from .benchmark import (
     BenchmarkGateError,
     SUITE_FILENAMES,
@@ -182,66 +182,6 @@ def _run_benchmark(
     return run_suite(suite, report_path=report_path)
 
 
-def _strict_doctor_check() -> dict[str, object]:
-    with tempfile.TemporaryDirectory(prefix="ats-agent-doctor-") as directory:
-        root = Path(directory)
-        resume = root / "resume.txt"
-        job = root / "job.md"
-        proposal_path = root / "proposal.json"
-        approval_path = root / "approval.json"
-        output_path = root / "tailored.txt"
-        resume.write_text("PROJECTS\n- Helped build automated workflows with 42 tests.\n", encoding="utf-8")
-        job.write_text("Workflow automation is required.\n", encoding="utf-8")
-        proposal = build_proposal(resume, job, candidate_id="doctor-candidate")
-        supported = next(change for change in proposal["changes"] if change.get("supported"))
-        _write_json(proposal_path, proposal)
-        manifest = build_approval_manifest(
-            proposal,
-            proposal_filename=proposal_path.name,
-            selections=[(supported["id"], supported.get("default_variant") or supported["variants"][0]["id"])],
-            output_document=output_path.name,
-            document_mode="preserve",
-        )
-        _write_json(approval_path, manifest)
-        receipt = apply_manifest(approval_path)
-        loaded = load(output_path)
-        return {
-            "status": "passed",
-            "proposal_created": proposal_path.is_file(),
-            "approval_created": approval_path.is_file(),
-            "output_validated": bool(loaded.get("body_text")),
-            "receipt_status": receipt.get("status"),
-        }
-
-
-def _doctor(*, strict: bool = False) -> dict[str, object]:
-    payload: dict[str, object] = {
-        "schema_version": 1,
-        "status": "ready",
-        "package": {"name": "tailoring-ats-cvs", "version": __version__, "executable": "ats-agent"},
-        "python": sys.version.split()[0],
-        "optional_dependencies": {
-            "pypdf": bool(find_spec("pypdf")),
-            "python_docx": bool(find_spec("docx")),
-        },
-        "capabilities": {
-            "txt_markdown_html_rtf": True,
-            "docx_input": True,
-            "docx_preserve_output": bool(find_spec("docx")),
-            "pdf_input": bool(find_spec("pypdf")),
-            "pdf_output": False,
-            "redacted_review": True,
-            "digest_bound_approval": True,
-            "transactional_apply": True,
-            "benchmark_v3": True,
-            "agent_adapter_contract": 1,
-        },
-    }
-    if strict:
-        payload["strict_check"] = _strict_doctor_check()
-    return payload
-
-
 def _error_exit_code(exc: Exception) -> int:
     if isinstance(exc, BenchmarkGateError):
         return 7
@@ -325,6 +265,40 @@ def main(argv: list[str] | None = None) -> int:
         "--redacted",
         action="store_true",
         help="write a shareable review with candidate content removed",
+    )
+
+    tailor_cmd = sub.add_parser(
+        "tailor",
+        help="one-door pipeline: propose, approve, apply, validate in a single run",
+    )
+    tailor_cmd.add_argument("cv", type=_existing, help="candidate CV path")
+    tailor_cmd.add_argument(
+        "source",
+        help="JD file/text, posting URL, ATS board URL, URL list (.md/.txt), or JSON export",
+    )
+    tailor_cmd.add_argument("--run-dir", required=True)
+    tailor_cmd.add_argument("--candidate-id", default=None)
+    tailor_cmd.add_argument("--evidence", action="append", default=[], type=_existing)
+    tailor_cmd.add_argument("--company-context", type=_existing)
+    tailor_cmd.add_argument(
+        "--rewrite-command",
+        action="append",
+        default=[],
+        help="optional local command rewrite provider arguments; repeat in order",
+    )
+    tailor_cmd.add_argument("--interactive", action="store_true")
+    tailor_cmd.add_argument(
+        "--approve-from",
+        help="JSON file mapping role-id or '*' to selection token lists",
+    )
+    tailor_cmd.add_argument("--max-urls", type=int, default=25)
+    tailor_cmd.add_argument("--force", action="store_true")
+    tailor_cmd.add_argument(
+        "--no-verify-live",
+        dest="verify_live",
+        action="store_false",
+        default=True,
+        help="skip re-checking captured postings before apply",
     )
 
     research = sub.add_parser(
@@ -494,6 +468,27 @@ def main(argv: list[str] | None = None) -> int:
                 _write_json(Path(args.output), payload)
             if not args.no_summary:
                 sys.stderr.write(render_proposal_summary(payload))
+        elif args.command == "tailor":
+            candidate = args.candidate_id or Path(args.cv).stem.lower().replace(" ", "-") or "candidate"
+            provider = (
+                CommandRewriteProvider(tuple(args.rewrite_command))
+                if getattr(args, "rewrite_command", None)
+                else None
+            )
+            payload = _run_tailor(
+                Path(args.cv),
+                args.source,
+                candidate_id=candidate,
+                run_dir=Path(args.run_dir),
+                evidence_paths=[Path(p) for p in args.evidence],
+                context_paths=[Path(args.company_context)] if args.company_context else [],
+                approve_from=(Path(args.approve_from) if args.approve_from else None),
+                interactive=bool(args.interactive),
+                verify_live=bool(args.verify_live),
+                max_urls=int(args.max_urls),
+                force=bool(args.force),
+                rewrite_provider=provider,
+            )
         elif args.command == "prepare":
             proposal = _proposal_from_args(args)
             out = Path(args.out).expanduser().resolve()
@@ -527,7 +522,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         else:
             payload = apply_manifest(Path(args.approval_manifest))
-    except (ValueError, OSError, json.JSONDecodeError) as exc:
+    except (ValueError, OSError, json.JSONDecodeError, TailorBlocked) as exc:
         print(
             json.dumps(
                 {"status": "blocked", "error": str(exc)},

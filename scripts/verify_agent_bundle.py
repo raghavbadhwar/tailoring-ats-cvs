@@ -4,12 +4,21 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 import zipfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _release_version import display_version, package_version
+
 
 def verify(output: Path) -> None:
-    archives = [output / "tailor-cv-agent-skill-v1.0.0-beta.4.zip", output / "tailoring-ats-cvs-claude-plugin-v1.0.0-beta.4.zip"]
+    root = Path(__file__).resolve().parents[1]
+    display = display_version(package_version(root))
+    archives = [
+        output / f"tailor-cv-agent-skill-v{display}.zip",
+        output / f"tailoring-ats-cvs-claude-plugin-v{display}.zip",
+    ]
     expected = {name: digest for digest, name in (line.split("  ", 1) for line in (output / "SHA256SUMS").read_text(encoding="utf-8").splitlines())}
     for path in archives:
         if hashlib.sha256(path.read_bytes()).hexdigest() != expected.get(path.name):

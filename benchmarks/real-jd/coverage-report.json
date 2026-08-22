@@ -1,0 +1,119 @@
+{
+ "aggregate_gap": 0.0,
+ "corpus_entries": 12,
+ "esco_decision": "keep_hand_alias_table",
+ "esco_threshold": 0.15,
+ "per_jd": [
+  {
+   "corpus_id": "real-greenhouse-01",
+   "expected_requirement_lines": 0,
+   "extracted_requirements": 6,
+   "miss_rate": 0.0,
+   "missed_expected_lines": 0,
+   "role": "Software Engineer, Intern",
+   "sample_missed": []
+  },
+  {
+   "corpus_id": "real-greenhouse-02",
+   "expected_requirement_lines": 0,
+   "extracted_requirements": 6,
+   "miss_rate": 0.0,
+   "missed_expected_lines": 0,
+   "role": "Software Engineer, Intern",
+   "sample_missed": []
+  },
+  {
+   "corpus_id": "real-greenhouse-03",
+   "expected_requirement_lines": 0,
+   "extracted_requirements": 2,
+   "miss_rate": 0.0,
+   "missed_expected_lines": 0,
+   "role": "PhD GenAI Research Scientist Intern",
+   "sample_missed": []
+  },
+  {
+   "corpus_id": "real-greenhouse-04",
+   "expected_requirement_lines": 0,
+   "extracted_requirements": 9,
+   "miss_rate": 0.0,
+   "missed_expected_lines": 0,
+   "role": "Product Management Intern (Summer 2027)",
+   "sample_missed": []
+  },
+  {
+   "corpus_id": "real-greenhouse-05",
+   "expected_requirement_lines": 0,
+   "extracted_requirements": 5,
+   "miss_rate": 0.0,
+   "missed_expected_lines": 0,
+   "role": "Software Engineering Intern (2027 Start) - Winter",
+   "sample_missed": []
+  },
+  {
+   "corpus_id": "real-greenhouse-06",
+   "expected_requirement_lines": 0,
+   "extracted_requirements": 5,
+   "miss_rate": 0.0,
+   "missed_expected_lines": 0,
+   "role": "Software Engineer Intern (Winter 2027)",
+   "sample_missed": []
+  },
+  {
+   "corpus_id": "real-greenhouse-07",
+   "expected_requirement_lines": 0,
+   "extracted_requirements": 6,
+   "miss_rate": 0.0,
+   "missed_expected_lines": 0,
+   "role": "Market Research Strategy Intern",
+   "sample_missed": []
+  },
+  {
+   "corpus_id": "real-greenhouse-08",
+   "expected_requirement_lines": 0,
+   "extracted_requirements": 14,
+   "miss_rate": 0.0,
+   "missed_expected_lines": 0,
+   "role": "AI Builder Intern",
+   "sample_missed": []
+  },
+  {
+   "corpus_id": "real-greenhouse-09",
+   "expected_requirement_lines": 0,
+   "extracted_requirements": 2,
+   "miss_rate": 0.0,
+   "missed_expected_lines": 0,
+   "role": "Technical Advisor Specialist (Part-Time Internship) ",
+   "sample_missed": []
+  },
+  {
+   "corpus_id": "real-greenhouse-10",
+   "expected_requirement_lines": 0,
+   "extracted_requirements": 9,
+   "miss_rate": 0.0,
+   "missed_expected_lines": 0,
+   "role": "Account Development Representative Intern - Atlanta",
+   "sample_missed": []
+  },
+  {
+   "corpus_id": "real-greenhouse-11",
+   "expected_requirement_lines": 0,
+   "extracted_requirements": 9,
+   "miss_rate": 0.0,
+   "missed_expected_lines": 0,
+   "role": "Account Development Representative Intern - Phoenix",
+   "sample_missed": []
+  },
+  {
+   "corpus_id": "real-greenhouse-12",
+   "expected_requirement_lines": 0,
+   "extracted_requirements": 10,
+   "miss_rate": 0.0,
+   "missed_expected_lines": 0,
+   "role": "Software Engineering Internship - London",
+   "sample_missed": []
+  }
+ ],
+ "schema_version": 1,
+ "total_expected_lines": 0,
+ "total_missed_lines": 0
+}

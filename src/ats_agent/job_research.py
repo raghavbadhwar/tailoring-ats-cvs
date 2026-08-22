@@ -4,14 +4,14 @@ from __future__ import annotations
 import ipaddress
 import hashlib
 import json
-import re
-import shutil
 import socket
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 from urllib.parse import urlsplit
+
+from .capture import CaptureError, capture_url, clean_capture
 
 from .hashing import sha256_path
 from .review import write_review_bundle
@@ -25,22 +25,9 @@ GENERIC_GAP_CATEGORIES = {"eligibility", "education", "availability"}
 
 
 def _clean_capture(text: str) -> str:
-    """Remove obvious page chrome while retaining complete content clauses."""
+    """Delegate chrome-cleaning to the shared capture module."""
 
-    ignored = re.compile(
-        r"^(?:cookie|privacy|accept all|manage preferences|skip to content|"
-        r"sign in|create account|share this job)$",
-        re.IGNORECASE,
-    )
-    lines: list[str] = []
-    seen: set[str] = set()
-    for raw in text.splitlines():
-        line = re.sub(r"\s+", " ", raw).strip()
-        if not line or ignored.match(line) or line.lower() in seen:
-            continue
-        seen.add(line.lower())
-        lines.append(line)
-    return "\n".join(lines) + ("\n" if lines else "")
+    return clean_capture(text)
 
 
 def _validate_role_dossier(
@@ -340,47 +327,12 @@ def _job_list(path: Path) -> list[dict[str, object]]:
 
 
 def _capture(url: str, destination: Path, *, source_type: str) -> dict[str, object]:
-    executable = shutil.which("scrapling")
-    if executable is None:
-        raise ValueError(
-            "Scrapling is required for job research; install it separately with "
-            "uv tool install 'scrapling==0.4.12'"
-        )
-    completed = subprocess.run(
-        [
-            executable,
-            "extract",
-            "get",
-            url,
-            str(destination),
-            "--timeout",
-            "30",
-            "--no-follow-redirects",
-            "--no-stealthy-headers",
-            "--ai-targeted",
-        ],
-        capture_output=True,
-        text=True,
-        shell=False,
-        timeout=45,
-    )
-    if completed.returncode or not destination.is_file():
-        detail = (completed.stderr or completed.stdout).strip()[-1000:]
-        raise ValueError(f"Scrapling capture failed for {url}: {detail or 'no output'}")
-    captured = destination.read_text(encoding="utf-8")
-    cleaned = _clean_capture(captured)
-    if len(re.findall(r"[A-Za-z0-9]+", cleaned)) < 8:
-        raise ValueError(f"Scrapling capture was empty or insufficient for {url}")
-    destination.write_text(cleaned, encoding="utf-8")
-    return {
-        "url": url,
-        "path": str(destination),
-        "sha256": sha256_path(destination),
-        "captured_at": datetime.now(timezone.utc).isoformat(),
-        "method": "scrapling_public_https",
-        "source_type": source_type,
-        "extraction_status": "captured",
-    }
+    """Delegate to the shared capture module; provenance schema is unchanged."""
+
+    try:
+        return capture_url(url, destination, source_type=source_type)
+    except CaptureError as exc:
+        raise ValueError(str(exc)) from exc
 
 
 def _keyword_coverage(proposal: dict) -> list[dict[str, object]]:

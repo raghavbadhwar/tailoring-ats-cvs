@@ -20,7 +20,9 @@ SKILL_DIR="${CODEX_HOME:-$HOME/.codex}/skills/tailor-cv"
 
 1. Run `python "$SKILL_DIR/scripts/ensure_cli.py" --check`. If it reports `bootstrap_required` or `upgrade_required`, read the listed `attempts` chain aloud (every tier, in order) and ask exactly once: "May I install the ats-agent engine using this chain? [y/N]". Do not run `--install --manager auto` before an explicit yes; one yes covers the whole ordered chain, including automatic fall-through from PyPI to the pinned GitHub tag and finally an isolated venv.
 2. Require a CV and job-description path; use a fresh user-selected run directory outside the skill or plugin. Evidence files are optional candidate evidence; company context is not candidate evidence.
-3. Prepare only: `python "$SKILL_DIR/scripts/run_cli.py" -- prepare "<resume>" "<job-description>" --candidate-id "<candidate-id>" --out "<run-directory>"`.
+3. Preferred one-door run when approvals are known up front:
+   `python "$SKILL_DIR/scripts/run_cli.py" -- tailor "<resume>" "<jd-or-url-or-list>" --candidate-id "<candidate-id>" --run-dir "<run-directory>" --approve-from <approvals.json>` (JSON mapping `{"role-id | *": ["C1:variant", ...]}`). It proposes, applies named approvals, validates, and prints a delivery card.
+   Otherwise prepare only: `python "$SKILL_DIR/scripts/run_cli.py" -- prepare "<resume>" "<job-description>" --candidate-id "<candidate-id>" --out "<run-directory>"`.
 4. Summarize: `python "$SKILL_DIR/scripts/summarize_proposal.py" "<run-directory>/proposal.json" --output "<run-directory>/summary.json"`. Present hard gates, evidence mapping, gaps, supported changes, variants, evidence IDs, sections, and digest. Stop for explicit approval such as `C1:balanced, C3:compact`.
 5. Only after explicit approval: `python "$SKILL_DIR/scripts/run_cli.py" -- approve "<run-directory>/proposal.json" --select C1:balanced --output "<run-directory>/approval.json" --output-document "<run-directory>/tailored-resume.docx"`; then run `apply` and `validate` through `scripts/run_cli.py`.
 

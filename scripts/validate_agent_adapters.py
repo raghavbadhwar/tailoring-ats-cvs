@@ -4,7 +4,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _release_version import display_version, package_version
 
 
 def validate_repository(root: Path) -> dict[str, object]:
@@ -28,7 +32,7 @@ def validate_repository(root: Path) -> dict[str, object]:
         errors.append("missing explicit installation approval")
     if any("shell=True" in script.read_text(encoding="utf-8") for script in scripts):
         errors.append("shell=True in adapter script")
-    if manifest.get("version") != "1.0.0-beta.4" or manifest.get("skills") != ["./.agents/skills/tailor-cv"]:
+    if manifest.get("version") != display_version(package_version(root)) or manifest.get("skills") != ["./.agents/skills/tailor-cv"]:
         errors.append("plugin manifest mismatch")
     if os.name != "nt" and not (root / "bin/ats-cv").stat().st_mode & 0o111:
         errors.append("POSIX launcher is not executable")

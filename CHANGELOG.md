@@ -3,6 +3,26 @@
 ## Unreleased
 
 ### Added
+- `ats-agent tailor`: one-door orchestrator (propose→approve→apply→validate
+  in one session) with explicit `--interactive` / `--approve-from` modes,
+  crash-safe versioned run journal, digest idempotency ("already tailored"),
+  tiered liveness re-check for captured postings, and outcome-first delivery
+  cards on stderr.
+- Invisible intake: JD file/text, raw posting URLs, plain-text URL lists,
+  ATS board URLs and native Greenhouse/Lever/Ashby syndication readers.
+- Shared capture module (`ats_agent.capture`): retry + extraction fallback,
+  bounded concurrency, per-host pacing, 24 h TTL cache.
+- Real-JD frozen regression corpus (12 live internship postings via ATS
+  APIs) with alias-coverage measurement harness; ESCO enrichment rejected
+  on measured evidence (gap 0.0% < 15% threshold).
+- Honesty fuzz property (hypothesis): applied output never gains unsupported
+  terms; provider-injection adversarial test; LLM reference provider script
+  behind the existing command-provider JSON contract.
+- Performance gate: 10-role propose batch completes in <90 s (measured ~0.1 s).
+
+### Changed
+- Bundle/validator tooling derives release version solely from
+  `pyproject.toml` (`scripts/_release_version.py`) — future bumps touch one file.
 
 - `docs/pypi-project-description.md`: registry-ready project description.
 - Mermaid workflow diagram in `docs/e2e-flow.md`.
