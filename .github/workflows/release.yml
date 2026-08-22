@@ -116,7 +116,7 @@ jobs:
             HOLDOUT_NOTE="**PROTECTED HOLDOUT NOT EXECUTED.** Public Benchmark v3, full CI, and security gates passed; the private holdout gate is deferred for this beta and remains mandatory for stable v1.0.0."
           fi
           gh release create "$GITHUB_REF_NAME" \
-            dist/* dist/agent-adapters/* sbom.cdx.json SHA256SUMS release-check.json benchmarks/v3/reports/*.json \
+            dist/*.whl dist/*.tar.gz dist/agent-adapters/* sbom.cdx.json SHA256SUMS release-check.json benchmarks/v3/reports/*.json \
             --repo "$GITHUB_REPOSITORY" \
             --title "Trustworthy CV Tailoring v1.0.0-beta.3" \
             --notes "Approval-first beta. Includes reproducible package artifacts, SBOM, checksums, public benchmark reports, and release-gate verification metadata. No universal ATS or employer-acceptance claims are made.
