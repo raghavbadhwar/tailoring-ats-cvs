@@ -5,6 +5,36 @@ realistic DOCX CV + evidence file + job description (see "Verification
 run" at the end). This page maps what the tool *verifiably does today*,
 not aspirations.
 
+## Workflow diagram
+
+```mermaid
+flowchart TD
+    Start(["Candidate starts tailor-cv<br/>(Claude /plugin, Codex skill, or CLI)"]) --> Eng{"ats-agent engine ready?"}
+    Eng -- "no" --> Consent["ONE consent prompt:<br/>install engine via ordered chain<br/>PyPI → pinned GitHub tag → isolated venv"]
+    Consent --> Doctor["doctor --strict verification<br/>+ install-state manifest"]
+    Doctor --> Ready
+    Eng -- "yes" --> Ready(["engine ready"])
+
+    Ready --> Ingest["1 · INGEST<br/>CV (.docx/.pdf/.md/…) + job description<br/>+ evidence files — sha256 & format audit"]
+    Ingest --> Ledger["2 · EVIDENCE LEDGER<br/>atomic claims · ownership level<br/>candidate-scoped provenance"]
+    Ledger --> Req["3 · REQUIREMENTS<br/>clause extraction from JD bullets/sentences<br/>aliases: B.Com→bachelor · A/B-testing terms"]
+    Req --> Map["4 · MATCH + HARD GATES<br/>direct / transferable / unsupported<br/>negation-aware: 'No A/B testing' ≠ coverage"]
+    Map --> Gates{"Hard gate satisfied?"}
+    Gates -- "no (e.g. work authorization)" --> Blocked["Blocked honestly —<br/>eligibility gap reported, nothing edited"]
+    Gates -- "yes / not applicable" --> Propose["5 · PROPOSE<br/>surface-evidence changes with<br/>conservative / balanced / compact variants"]
+    Map -. "unsupported JD terms" .-> Refused["REFUSED GAPS list<br/>(never inserted into the CV)"]
+    Propose --> Summary["6 · CHAT SUMMARY (stderr)<br/>coverage table · changes with variants<br/>refused gaps · next-step commands"]
+    Refused --> Summary
+    Summary --> Approve{"Explicit approval?<br/>user names each change:variant"}
+    Approve -- "none / refusal" --> Untouched(["Nothing changed.<br/>Source CV untouched"])
+    Approve -- "yes — named subset only" --> Apply["7 · APPLY<br/>temp write → reparse → verify →<br/>atomic rename (source CV preserved)"]
+    Apply --> Validate["8 · VALIDATE<br/>applied-change receipts · layout audit"]
+    Validate --> Out(["Tailored CV delivered<br/>+ receipts and review bundle"])
+```
+
+## Text map
+
+
 ```text
  resume.docx ─┐
  evidence.md ─┼─► 1 INGEST ─► 2 EVIDENCE LEDGER ─┐

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `docs/pypi-project-description.md`: registry-ready project description.
+- Mermaid workflow diagram in `docs/e2e-flow.md`.
+
 ## 1.0.0b4
 
 ### Added
