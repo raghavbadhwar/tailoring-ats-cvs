@@ -33,6 +33,19 @@ except ImportError:  # pragma: no cover - dev extra missing
             return func
         return decorate
 
+    class HealthCheck:  # type: ignore[misc]
+        too_slow = "too_slow"
+
+    class _StubStrategies:
+        """Import-time stand-in; methods are never drawn while skipped."""
+
+        def __getattr__(self, name):
+            def _strategy(*_args, **_kwargs):
+                return None
+            return _strategy
+
+    st = _StubStrategies()
+
 from ats_agent.orchestrator import tailor  # noqa: E402
 from ats_agent.validation import validate_changes  # noqa: E402
 
