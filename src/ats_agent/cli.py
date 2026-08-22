@@ -10,6 +10,7 @@ from importlib.util import find_spec
 from pathlib import Path
 
 from . import __version__
+from .summary import render_proposal_summary
 from .benchmark import (
     BenchmarkGateError,
     SUITE_FILENAMES,
@@ -302,6 +303,17 @@ def main(argv: list[str] | None = None) -> int:
     )
     _add_analysis_inputs(propose)
     propose.add_argument("--output", help="proposal JSON output path")
+    propose.add_argument(
+        "--no-summary",
+        action="store_true",
+        help="suppress the human-readable stderr summary",
+    )
+
+    audit.add_argument(
+        "--no-summary",
+        action="store_true",
+        help="suppress the human-readable stderr summary",
+    )
 
     prepare = sub.add_parser(
         "prepare",
@@ -480,6 +492,8 @@ def main(argv: list[str] | None = None) -> int:
             payload = _proposal_from_args(args)
             if args.command == "propose" and args.output:
                 _write_json(Path(args.output), payload)
+            if not args.no_summary:
+                sys.stderr.write(render_proposal_summary(payload))
         elif args.command == "prepare":
             proposal = _proposal_from_args(args)
             out = Path(args.out).expanduser().resolve()

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Added
+
+- Chat-first stderr summary for `propose`/`audit`: requirement coverage,
+  supported changes with variants, refused gaps, and ready-to-paste
+  next-step commands. stdout remains pure JSON; `--no-summary` suppresses.
+- `docs/e2e-flow.md`: verified end-to-end flow map with stage guarantees.
+
 ### Fixed
 
 - Requirement segmentation now keeps unpunctuated bullet lines; JD bullet
