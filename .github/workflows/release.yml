@@ -92,7 +92,7 @@ jobs:
         shell: bash
         run: |
           cyclonedx-py environment --output-format JSON --output-file sbom.cdx.json
-          sha256sum dist/* dist/agent-adapters/* sbom.cdx.json release-check.json benchmarks/v3/reports/*.json > SHA256SUMS
+          sha256sum dist/*.whl dist/*.tar.gz dist/agent-adapters/* sbom.cdx.json release-check.json benchmarks/v3/reports/*.json > SHA256SUMS
       - name: Upload immutable release evidence
         uses: actions/upload-artifact@v6
         with:
