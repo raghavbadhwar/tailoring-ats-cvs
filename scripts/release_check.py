@@ -79,11 +79,22 @@ def main() -> None:
         type=Path,
         help="read-only private 60-case public-schema holdout JSONL used only in protected release CI",
     )
+    parser.add_argument(
+        "--require-holdout",
+        action="store_true",
+        help="fail closed when --private-holdout is absent (mandatory for stable releases)",
+    )
     args = parser.parse_args()
 
     if __version__ != EXPECTED_VERSION:
         raise SystemExit(
             f"package version {__version__!r} does not match beta {EXPECTED_VERSION!r}"
+        )
+
+    if args.require_holdout and args.private_holdout is None:
+        raise SystemExit(
+            "--require-holdout was set but no private holdout was provided; "
+            "stable releases must pass the protected holdout"
         )
 
     _run(sys.executable, "scripts/check_release_tree.py")
@@ -105,17 +116,27 @@ def main() -> None:
             )
         _check_private_holdout(report)
         holdout = {
+            "executed": True,
             "case_count": report["case_count"],
             "dataset_sha256": _sha256(path),
             "metrics": report["metrics"],
         }
+    elif args.require_holdout:
+        raise SystemExit("unreachable: require-holdout precheck should have failed")
 
     print(
         json.dumps(
             {
                 "status": "passed",
                 "version": __version__,
-                "private_holdout": holdout,
+                "protected_holdout": holdout
+                or {
+                    "executed": False,
+                    "disclosure": (
+                        "Protected 60-case private holdout was NOT executed for this "
+                        "prerelease. Public Benchmark v3, full CI, and security gates passed."
+                    ),
+                },
             },
             indent=2,
             sort_keys=True,

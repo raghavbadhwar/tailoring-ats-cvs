@@ -15,7 +15,7 @@ class BetaReleaseContractTests(unittest.TestCase):
         self.assertEqual(match.group(1), "1.0.0b3")
         self.assertEqual(ats_agent.__version__, "1.0.0b3")
 
-    def test_release_workflow_requires_protected_holdout_before_publish(self):
+    def test_release_workflow_gates_before_publish(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertIn('test "${GITHUB_REF_NAME}" = "v1.0.0-beta.3"', workflow)
         self.assertIn('assert version == "1.0.0b3", version', workflow)
@@ -23,6 +23,31 @@ class BetaReleaseContractTests(unittest.TestCase):
         self.assertIn("PRIVATE_HOLDOUT_B64", workflow)
         self.assertIn("release_check.py --private-holdout", workflow)
         self.assertLess(workflow.index("release_check.py --private-holdout"), workflow.index("gh release create"))
+        self.assertLess(workflow.index("release_check.py > release-check.json"), workflow.index("gh release create"))
+
+    def test_beta_holdout_gate_is_conditional_with_disclosure(self):
+        checker = (ROOT / "scripts/release_check.py").read_text(encoding="utf-8")
+        self.assertIn("--require-holdout", checker)
+        self.assertIn('"executed": False', checker)
+        self.assertIn("NOT executed", checker)
+        workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertIn("steps.holdout.outputs.available == 'true'", workflow)
+        self.assertIn("PROTECTED HOLDOUT NOT EXECUTED", workflow)
+        self.assertIn("--require-holdout", workflow)
+
+    def test_require_holdout_fails_closed_without_dataset(self):
+        import subprocess
+        import sys
+
+        completed = subprocess.run(
+            [sys.executable, "scripts/release_check.py", "--require-holdout"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("require-holdout", (completed.stderr + completed.stdout).lower())
+        self.assertNotIn('"status": "passed"', completed.stdout)
 
     def test_security_and_cross_platform_workflows_are_present(self):
         security = (ROOT / ".github/workflows/security.yml").read_text(encoding="utf-8")

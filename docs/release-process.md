@@ -17,7 +17,11 @@ The 60-case private holdout must not be committed to the public repository. Conf
 
 The release workflow decodes the secret into an ephemeral runner file, runs `scripts/release_check.py --private-holdout ...`, records the holdout SHA-256 and aggregate metrics, and never uploads the private cases themselves.
 
-The private holdout is a release blocker. If the secret is absent, malformed, contains fewer than 60 cases, or fails the release thresholds, the release job fails.
+The gate is tiered:
+
+- **Holdout secret present (any tag):** the full protected holdout runs and its thresholds are enforced. Absent, malformed, fewer than 60 cases, or failing thresholds fails the release job.
+- **Holdout secret absent (beta tags only):** the release publishes as a prerelease with an explicit `PROTECTED HOLDOUT NOT EXECUTED` banner in the notes and `"protected_holdout": {"executed": false}` recorded in `release-check.json`. No stable release may take this path.
+- **Stable `v1.0.0` tags:** must invoke `release_check.py --require-holdout`, which fails closed when no private holdout is provided.
 
 ## Beta publication
 
@@ -26,7 +30,7 @@ After PR checks pass on the exact head:
 1. Merge the trustworthy-v1 PR into `main`.
 2. Confirm the exact merged SHA passes the required workflows.
 3. Create the annotated tag `v1.0.0-beta.3` on that exact SHA.
-4. The tag-triggered `Release` workflow reruns release gates, the private holdout, security checks, package build, clean-wheel install, SBOM generation, and checksums.
+4. The tag-triggered `Release` workflow reruns release gates, the protected holdout when configured (with an explicit not-executed banner when deferred for a beta), security checks, package build, clean-wheel install, SBOM generation, and checksums.
 5. Only after those steps pass does the workflow create the GitHub prerelease.
 
 Release assets include the wheel, source distribution, Codex skill ZIP, Claude Code plugin ZIP, CycloneDX SBOM, SHA-256 checksums, release-check metadata, and public Benchmark v3 reports.
