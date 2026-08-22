@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.0b4
 
 ### Added
 
@@ -13,6 +13,10 @@
 - Bootstrap v2: ordered install attempts (PyPI → pinned GitHub tag →
   isolated venv) under one informed consent, with an install-state manifest
   so the engine resolves even when no tier touches PATH.
+- Chat-first stderr summary for `propose`/`audit`: requirement coverage,
+  supported changes with variants, refused gaps, and ready-to-paste
+  next-step commands. stdout remains pure JSON; `--no-summary` suppresses.
+- `docs/e2e-flow.md`: verified end-to-end flow map with stage guarantees.
 
 ### Changed
 

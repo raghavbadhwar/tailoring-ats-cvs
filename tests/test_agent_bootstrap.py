@@ -50,11 +50,11 @@ class BootstrapTests(unittest.TestCase):
 
     def test_healthy_cli_is_ready(self) -> None:
         module = load_module()
-        doctor = {"package": {"version": "1.0.0b3"}, "strict_check": {"status": "passed"}}
+        doctor = {"package": {"version": "1.0.0b4"}, "strict_check": {"status": "passed"}}
         with patch.object(module.shutil, "which", return_value="/usr/bin/ats-agent"), patch.object(module.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout=json.dumps(doctor), stderr="")) as run:
             result = module.check_cli(POLICY)
         self.assertEqual(result["status"], "ready")
-        self.assertEqual(result["version"], "1.0.0b3")
+        self.assertEqual(result["version"], "1.0.0b4")
         self.assertFalse(run.call_args.kwargs.get("shell", False))
 
     def test_install_uses_pinned_uv_spec(self) -> None:
@@ -62,7 +62,7 @@ class BootstrapTests(unittest.TestCase):
         with patch.object(module.shutil, "which", side_effect=lambda name: "/usr/bin/uv" if name == "uv" else None), patch.object(module.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")) as run, patch.object(module, "check_cli", return_value={"status": "ready"}):
             result = module.install_cli(POLICY, "uv")
         self.assertEqual(result["status"], "installed")
-        self.assertIn("tailoring-ats-cvs[documents]==1.0.0b3", run.call_args.args[0])
+        self.assertIn("tailoring-ats-cvs[documents]==1.0.0b4", run.call_args.args[0])
 
     def test_check_enumerates_full_attempt_chain(self) -> None:
         module = load_module()
@@ -88,7 +88,7 @@ class BootstrapTests(unittest.TestCase):
             if "pipx install" in joined:
                 return SimpleNamespace(returncode=1, stdout="", stderr="no pipx pkg")
             if ("uv tool install" in joined
-                    and "git+https://github.com/raghavbadhwar/tailoring-ats-cvs.git@v1.0.0-beta.3" in joined):
+                    and "git+https://github.com/raghavbadhwar/tailoring-ats-cvs.git@v1.0.0-beta.4" in joined):
                 return SimpleNamespace(returncode=0, stdout="", stderr="")
             raise AssertionError(f"unexpected tier executed: {argv}")
 
@@ -100,12 +100,12 @@ class BootstrapTests(unittest.TestCase):
              patch.object(module, "check_cli", return_value={
                  "status": "ready",
                  "executable": "/opt/uv-tools/ats-agent",
-                 "version": "1.0.0b3",
+                 "version": "1.0.0b4",
              }):
             result = module.install_cli(POLICY, "auto")
         self.assertEqual(result["status"], "installed")
         self.assertEqual(result["tier"], "uv-git")
-        self.assertIn("git+https://github.com/raghavbadhwar/tailoring-ats-cvs.git@v1.0.0-beta.3",
+        self.assertIn("git+https://github.com/raghavbadhwar/tailoring-ats-cvs.git@v1.0.0-beta.4",
                       attempted[2][-1])
 
     def test_manifest_resolves_executable_without_path(self) -> None:
@@ -115,9 +115,9 @@ class BootstrapTests(unittest.TestCase):
             "schema_version": 1,
             "tier": "venv-pip",
             "executable": "/opt/engine/ats-agent",
-            "version": "1.0.0b3",
+            "version": "1.0.0b4",
         }
-        doctor = {"package": {"version": "1.0.0b3"}, "strict_check": {"status": "passed"}}
+        doctor = {"package": {"version": "1.0.0b4"}, "strict_check": {"status": "passed"}}
         with tempfile.TemporaryDirectory() as tmp:
             state = Path(tmp) / "install.json"
             policy = dict(load_module().load_policy(POLICY))

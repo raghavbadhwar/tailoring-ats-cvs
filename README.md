@@ -42,7 +42,7 @@ It does **not** invent qualifications, autonomously submit applications, or clai
 
 ## Release status
 
-The trustworthy v1 engineering line is prepared as `1.0.0b3`. Beta publication is fail-closed: the branch must pass CI, security, Benchmark v3, cross-platform compatibility, clean-wheel installation, and a protected 60-case private holdout before the `v1.0.0-beta.3` tag can publish a GitHub prerelease.
+The trustworthy v1 engineering line is prepared as `1.0.0b4`. Beta publication is fail-closed: the branch must pass CI, security, Benchmark v3, cross-platform compatibility, clean-wheel installation, and a protected 60-case private holdout before the `v1.0.0-beta.4` tag can publish a GitHub prerelease.
 
 ## Agent entry points
 
@@ -71,8 +71,8 @@ Then paste: `Use the tailor-cv skill. CV: ./my-cv.docx Job description: ./jd.md`
 **Standalone CLI** (no agent host):
 
 ```bash
-uv tool install "tailoring-ats-cvs[documents]==1.0.0b3"   # or, until PyPI:
-uv tool install "git+https://github.com/raghavbadhwar/tailoring-ats-cvs.git@v1.0.0-beta.3"
+uv tool install "tailoring-ats-cvs[documents]==1.0.0b4"   # or, until PyPI:
+uv tool install "git+https://github.com/raghavbadhwar/tailoring-ats-cvs.git@v1.0.0-beta.4"
 ats-agent doctor --strict
 ```
 
@@ -123,7 +123,7 @@ Build deterministic release bundles with:
 python scripts/build_agent_bundles.py --output dist/agent-adapters
 ```
 
-The bootstrap reference is pinned to the `v1.0.0-beta.3` release tag, not a moving branch. After installation, verify `ats-agent doctor --strict`.
+The bootstrap reference is pinned to the `v1.0.0-beta.4` release tag, not a moving branch. After installation, verify `ats-agent doctor --strict`.
 
 ## End-to-end workflow
 

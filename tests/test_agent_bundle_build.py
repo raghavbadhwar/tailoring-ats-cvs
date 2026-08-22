@@ -18,7 +18,7 @@ class AgentBundleBuildTests(unittest.TestCase):
             first = {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in build_bundles(ROOT, output)}
             second = {path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in build_bundles(ROOT, output)}
             self.assertEqual(first, second)
-            with zipfile.ZipFile(output / "tailor-cv-agent-skill-v1.0.0-beta.3.zip") as archive:
+            with zipfile.ZipFile(output / "tailor-cv-agent-skill-v1.0.0-beta.4.zip") as archive:
                 self.assertIn("tailor-cv/SKILL.md", archive.namelist())
-            with zipfile.ZipFile(output / "tailoring-ats-cvs-claude-plugin-v1.0.0-beta.3.zip") as archive:
+            with zipfile.ZipFile(output / "tailoring-ats-cvs-claude-plugin-v1.0.0-beta.4.zip") as archive:
                 self.assertIn("tailoring-ats-cvs/.claude-plugin/plugin.json", archive.namelist())

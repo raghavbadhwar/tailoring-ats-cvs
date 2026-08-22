@@ -10,7 +10,7 @@
       "name": "tailoring-ats-cvs",
       "source": "./",
       "description": "Approval-first, evidence-grounded CV tailoring through the local ats-agent CLI.",
-      "version": "1.0.0-beta.3",
+      "version": "1.0.0-beta.4",
       "author": {
         "name": "Raghav Badhwar",
         "url": "https://github.com/raghavbadhwar"

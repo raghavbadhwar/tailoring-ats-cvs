@@ -3,7 +3,7 @@ name: tailor-cv
 description: Audit and tailor a candidate CV against a job description using the local ats-agent CLI. Use for CV assessment, evidence mapping, review, explicit approval, application, or validation.
 metadata:
   author: raghavbadhwar
-  version: "1.0.0-beta.3"
+  version: "1.0.0-beta.4"
   repository: "https://github.com/raghavbadhwar/tailoring-ats-cvs"
 ---
 

@@ -17,7 +17,7 @@ def _log(command: str) -> None:
 def main() -> int:
     arguments = sys.argv[1:]
     if arguments == ["doctor", "--strict"]:
-        print(json.dumps({"schema_version": 1, "status": "ready", "package": {"name": "tailoring-ats-cvs", "version": "1.0.0b3"}, "strict_check": {"status": "passed"}}))
+        print(json.dumps({"schema_version": 1, "status": "ready", "package": {"name": "tailoring-ats-cvs", "version": "1.0.0b4"}, "strict_check": {"status": "passed"}}))
         return 0
     if not arguments:
         return 2

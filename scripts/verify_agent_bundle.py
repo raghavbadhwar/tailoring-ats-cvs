@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 def verify(output: Path) -> None:
-    archives = [output / "tailor-cv-agent-skill-v1.0.0-beta.3.zip", output / "tailoring-ats-cvs-claude-plugin-v1.0.0-beta.3.zip"]
+    archives = [output / "tailor-cv-agent-skill-v1.0.0-beta.4.zip", output / "tailoring-ats-cvs-claude-plugin-v1.0.0-beta.4.zip"]
     expected = {name: digest for digest, name in (line.split("  ", 1) for line in (output / "SHA256SUMS").read_text(encoding="utf-8").splitlines())}
     for path in archives:
         if hashlib.sha256(path.read_bytes()).hexdigest() != expected.get(path.name):
