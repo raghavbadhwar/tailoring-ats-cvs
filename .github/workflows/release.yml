@@ -124,10 +124,13 @@ jobs:
           $HOLDOUT_NOTE" \
             --prerelease \
             --verify-tag
-          gh release upload "$GITHUB_REF_NAME" \
-            --repo "$GITHUB_REPOSITORY" \
-            --clobber \
-            dist/*.whl dist/*.tar.gz dist/agent-adapters/* sbom.cdx.json SHA256SUMS release-check.json benchmarks/v3/reports/*.json
+          failed=0
+          for f in dist/*.whl dist/*.tar.gz dist/agent-adapters/* sbom.cdx.json SHA256SUMS release-check.json benchmarks/v3/reports/*.json; do
+            gh release upload "$GITHUB_REF_NAME" "$f" \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber || failed=1
+          done
+          exit $failed
   publish-pypi:
     needs: release
     runs-on: ubuntu-latest
