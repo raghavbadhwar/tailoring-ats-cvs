@@ -148,7 +148,7 @@ def _supporting_section(item: EvidenceItem) -> str:
     if re.search(
         r"\b(?:worked at|intern(?:ed|ship)?|employed|employment|"
         r"work experience|professional experience|role at|analyst at|"
-        r"associate at|consultant at)\b",
+        r"associate at|consultant at|volunteer|volunteering|volunteered)\b",
         body,
     ):
         return "experience"
@@ -169,28 +169,116 @@ def _target_section(cv: str, item: EvidenceItem) -> str:
     )
 
 
+_DISAVOWAL_PATTERN = re.compile(
+    r"^(?:explicit\s+non-evidence[:\s]*)?"
+    r"(?:no|not|never|without|zero|except|lack(?:ing)?|cannot|can't)\b",
+    re.IGNORECASE,
+)
+
+
+def _is_disavowal(text: str) -> bool:
+    """True for statements that declare the absence of an experience.
+
+    Disavowal lines belong to evidence files so the engine knows what a
+    candidate has NOT done; they must never be surfaced into the CV as if
+    they were achievements.
+    """
+
+    return _DISAVOWAL_PATTERN.match(text.strip()) is not None
+
+
 def _find_section_anchor(
     cv: str,
     ledger: EvidenceLedger,
     target_section: str,
+    prefer_text: str = "",
+    used_keys: set[tuple] | None = None,
 ) -> dict:
+    """Pick an unused insertion anchor for the target section.
+
+    Candidates are tried in priority order: the section heading, then
+    resume lines ranked by similarity to the evidence being surfaced, then
+    legacy fallbacks. Distributing sibling surface-evidence changes across
+    distinct existing lines keeps every ``insert_after`` anchor unique so
+    approval and application never see conflicting changes.
+    """
+
+    used = used_keys if used_keys is not None else set()
     headings = set(_SECTION_HEADINGS.get(target_section, (target_section,)))
     lines = cv.splitlines()
+    candidates: list[dict] = []
     for index, line in enumerate(lines, 1):
         if _normalized_heading(line) in headings:
-            return {
-                "part": "text",
-                "line_number": index,
-                "heading": line.strip(),
-            }
-    if target_section != "projects":
-        project_anchor = _find_section_anchor(cv, ledger, "projects")
-        if project_anchor.get("heading"):
-            return project_anchor
+            candidates.append(
+                {
+                    "part": "text",
+                    "line_number": index,
+                    "heading": line.strip(),
+                }
+            )
+            break
     resume_items = [item for item in ledger.items if item.source == "resume"]
+    candidates.extend(
+        _anchor_for(item) for item in _ranked_resume_items(resume_items, prefer_text)
+    )
+    if target_section != "projects":
+        project_anchor = _find_section_anchor(cv, ledger, "projects", prefer_text)
+        if project_anchor.get("heading"):
+            candidates.append(project_anchor)
     if resume_items:
-        return _anchor_for(resume_items[-1])
-    return {"part": "text", "line_number": len(lines), "heading": ""}
+        candidates.append(_anchor_for(resume_items[-1]))
+    candidates.append({"part": "text", "line_number": len(lines), "heading": ""})
+    for candidate in candidates:
+        if _anchor_key(candidate) not in used:
+            return candidate
+    return candidates[-1]
+
+
+_SIMILARITY_ANCHOR_THRESHOLD = 0.3
+
+
+def _ranked_resume_items(
+    resume_items: list[EvidenceItem],
+    prefer_text: str,
+) -> list[EvidenceItem]:
+    """All resume lines ordered by similarity to the surfaced evidence.
+
+    Similar lines rank first so related bullets cluster together; the full
+    list participates so sibling insertions can always find a distinct
+    anchor instead of colliding on one heading.
+    """
+
+    if not prefer_text:
+        return []
+    scored = [
+        (
+            _token_similarity(
+                re.findall(r"[a-z0-9]+", item.text.lower()),
+                re.findall(r"[a-z0-9]+", prefer_text.lower()),
+            ),
+            item,
+        )
+        for item in resume_items
+    ]
+    ranked = sorted(scored, key=lambda pair: -pair[0])
+    return [item for _, item in ranked]
+
+
+def _token_similarity(left: list[str], right: list[str]) -> float:
+    stop = {"the", "and", "for", "with", "in", "at", "of", "a", "an", "to"}
+    left_tokens = {token for token in left if token not in stop}
+    right_tokens = {token for token in right if token not in stop}
+    if not left_tokens or not right_tokens:
+        return 0.0
+    return len(left_tokens & right_tokens) / len(left_tokens | right_tokens)
+
+
+def _anchor_key(anchor: dict) -> tuple:
+    return (
+        anchor.get("part"),
+        anchor.get("paragraph_index"),
+        anchor.get("line_number"),
+    )
 
 
 def _variants_for(
@@ -235,6 +323,7 @@ def propose_supported_changes(
     matches = list(matches)
     match_index = _matches_by_evidence(matches)
     changes: list[dict] = []
+    used_anchor_keys: set[tuple] = set()
     normalized_resume = {
         " ".join(re.findall(r"[a-z0-9]+", item.text.lower()))
         for item in ledger.items
@@ -312,9 +401,18 @@ def propose_supported_changes(
                 continue
             if near_duplicate_cv_lines(item.text, cv):
                 continue
+            if _is_disavowal(item.text):
+                continue
             terms = list(match.get("normalized_terms", []))
             section = _target_section(cv, item)
-            anchor = _find_section_anchor(cv, ledger, section)
+            anchor = _find_section_anchor(
+                cv,
+                ledger,
+                section,
+                prefer_text=item.text,
+                used_keys=used_anchor_keys,
+            )
+            used_anchor_keys.add(_anchor_key(anchor))
             variants, provider_id, provider_version, fallback_reason, input_digest, output_digest = _variants_for(
                 selected_provider,
                 text=item.text,

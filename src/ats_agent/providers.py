@@ -117,6 +117,15 @@ def _surface_term(text: str, term: str) -> str:
 def _balanced_structure(text: str) -> str:
     """Vary sentence structure without introducing a new factual claim."""
 
+    if "; " in text:
+        head, _, tail = text.partition("; ")
+        tail = tail.strip()
+        if (
+            tail
+            and tail[0].isalpha()
+            and not tail.lower().startswith(("with", "without"))
+        ):
+            return f"{head}. {tail[0].upper()}{tail[1:]}"
     if " for " in text:
         return text.replace(" for ", " to support ", 1)
     if ", with " in text:
@@ -129,6 +138,18 @@ def _compact(text: str) -> str:
         r"\b(?:successfully|various|multiple|really|very)\b",
         "",
         text,
+        flags=re.IGNORECASE,
+    )
+    result = re.sub(
+        r"\bin order to\b",
+        "to",
+        result,
+        flags=re.IGNORECASE,
+    )
+    result = re.sub(
+        r"\butili[sz]ing\b",
+        "using",
+        result,
         flags=re.IGNORECASE,
     )
     result = re.sub(

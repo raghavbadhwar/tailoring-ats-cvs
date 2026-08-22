@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Requirement segmentation now keeps unpunctuated bullet lines; JD bullet
+  lists no longer collapse into a single dropped run.
+- Degree requirements match Indian degree spellings (B.Com, B.Tech, BSc,
+  MBA, and similar) instead of reporting supported education as gaps.
+- Alias matching ignores occurrences inside negation scopes, so evidence
+  lines such as "No A/B testing experience" or "no AWS/GCP/Azure" are no
+  longer counted as direct coverage.
+- Disavowal lines from evidence files are never surfaced into the CV as
+  proposed content.
+- Surface-evidence insertions anchor to distinct related resume lines so
+  multiple approved changes apply without anchor conflicts.
+
+### Changed
+
+- Deterministic rewrites emit a distinct balanced variant for semicolon-
+  joined statements (sentence split) plus additional compact trims.
+
 ## 1.0.0b3
 
 - Added approval-gated public job-list research through the local Scrapling CLI.

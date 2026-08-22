@@ -6,6 +6,8 @@ from typing import Iterable
 
 from .evidence import EvidenceItem, EvidenceLedger
 
+_DEGREE_TERMS = frozenset({"bachelor", "master"})
+
 TERM_ALIASES: dict[str, tuple[str, ...]] = {
     "python": ("python",),
     "typescript": ("typescript", "type script"),
@@ -22,9 +24,34 @@ TERM_ALIASES: dict[str, tuple[str, ...]] = {
     "git": ("git", "github", "version control"),
     "docker": ("docker", "containers", "containerization"),
     "kubernetes": ("kubernetes", "k8s"),
-    "aws": ("aws", "amazon web services"),
+    "aws": ("aws", "amazon web services", "redshift"),
     "azure": ("azure", "microsoft azure"),
-    "gcp": ("gcp", "google cloud platform"),
+    "gcp": ("gcp", "google cloud platform", "bigquery"),
+    "bachelor": (
+        "bachelor",
+        "bachelor's",
+        "b.com",
+        "bcom",
+        "b.tech",
+        "btech",
+        "b.sc",
+        "bsc",
+        "bba",
+        "bbm",
+        "undergraduate degree",
+    ),
+    "master": (
+        "master",
+        "master's",
+        "m.com",
+        "mcom",
+        "m.tech",
+        "mtech",
+        "m.sc",
+        "msc",
+        "mba",
+        "postgraduate degree",
+    ),
     "workflow automation": (
         "workflow automation",
         "automated workflow",
@@ -87,7 +114,16 @@ TERM_ALIASES: dict[str, tuple[str, ...]] = {
     "knowledge integration": ("knowledge integration", "sop integration", "sops"),
     "conversation strategy": ("conversation strategy", "conversation design"),
     "evaluation design": ("evaluation design", "evaluation framework"),
-    "a/b testing": ("a/b testing", "ab testing", "a b testing"),
+    "a/b testing": (
+        "a/b testing",
+        "a/b test",
+        "a/b tests",
+        "ab testing",
+        "a b testing",
+        "split testing",
+        "split test",
+        "experimentation",
+    ),
     "user research": ("user research", "usability research"),
     "usability": ("usability", "user experience"),
     "roadmap": ("roadmap", "product roadmap"),
@@ -170,9 +206,14 @@ TRAVEL_PATTERNS = (
 
 
 def _segments(text: str) -> Iterable[tuple[str, int, int]]:
-    """Yield sentence, bullet, and semicolon clauses with local spans."""
+    """Yield sentence, bullet, and semicolon clauses with local spans.
 
-    for match in re.finditer(r"[^.!?;\n]+(?:[.!?;]|$)", text):
+    ``re.MULTILINE`` is required so that ``$`` also matches at each line
+    end; without it, bullets and headings without terminal punctuation
+    are silently skipped instead of becoming requirement segments.
+    """
+
+    for match in re.finditer(r"[^.!?;\n]+(?:[.!?;]|$)", text, re.MULTILINE):
         raw = match.group(0)
         left_trimmed = raw.lstrip(" \t-*•")
         leading = len(raw) - len(left_trimmed)
@@ -422,23 +463,43 @@ def extract_requirements(job_description: str) -> list[dict]:
                 )
             )
 
+        matched: list[tuple[str, str]] = []
         for canonical, aliases in TERM_ALIASES.items():
-            if any(_contains_alias(body, alias) for alias in aliases):
-                key = ("skill", (canonical,), start)
-                if key in seen:
-                    continue
-                seen.add(key)
-                requirements.append(
-                    _record(
-                        kind="skill",
-                        text=segment,
-                        terms=[canonical],
-                        category=_term_category(canonical),
-                        importance=importance,
-                        start=start,
-                        end=end,
-                    )
+            if canonical in _DEGREE_TERMS:
+                continue
+            for alias in aliases:
+                if _contains_alias(body, alias):
+                    matched.append((canonical, alias))
+                    break
+        # Prefer specific aliases ("a/b tests") over generic ones ("tests")
+        # when both match the same segment.
+        for canonical, alias in matched:
+            dominated = any(
+                other_canonical != canonical
+                and len(other_alias) > len(alias)
+                and re.search(
+                    rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])",
+                    other_alias,
                 )
+                for other_canonical, other_alias in matched
+            )
+            if dominated:
+                continue
+            key = ("skill", (canonical,), start)
+            if key in seen:
+                continue
+            seen.add(key)
+            requirements.append(
+                _record(
+                    kind="skill",
+                    text=segment,
+                    terms=[canonical],
+                    category=_term_category(canonical),
+                    importance=importance,
+                    start=start,
+                    end=end,
+                )
+            )
 
     for index, requirement in enumerate(requirements, 1):
         requirement["id"] = f"R{index}"
@@ -578,8 +639,36 @@ def _ambiguous_alias_usage(
     return False
 
 
+_NEGATION_BEFORE = re.compile(
+    r"(?:\b(?:no|not|never|without|zero|except|lack(?:ing)?)\b|n't)"
+    r"[^.;]{0,32}$",
+    re.IGNORECASE,
+)
+
+
+def _unnegated_alias_positions(
+    evidence_text: str,
+    alias: str,
+) -> bool:
+    """True when the alias occurs at least once outside a negation scope.
+
+    Disavowal lines such as ``No A/B testing experience`` or
+    ``no AWS/GCP/Azure`` mention skills precisely because the candidate
+    lacks them; treating those mentions as coverage would fabricate
+    qualifications from explicit non-evidence.
+    """
+
+    pattern = re.compile(rf"(?<![a-z0-9]){re.escape(alias.lower())}(?![a-z0-9])")
+    body = evidence_text.lower()
+    for match in pattern.finditer(body):
+        window = body[max(0, match.start() - 36):match.start()]
+        if not _NEGATION_BEFORE.search(window):
+            return True
+    return False
+
+
 def _matches_alias(term: str, alias: str, evidence_text: str) -> bool:
-    return _contains_alias(evidence_text, alias) and not _ambiguous_alias_usage(
+    return _unnegated_alias_positions(evidence_text, alias) and not _ambiguous_alias_usage(
         term,
         alias,
         evidence_text,
