@@ -78,10 +78,13 @@ def _polite_get_json(url: str) -> dict[str, Any]:
         wait = MIN_HOST_INTERVAL_SECONDS - elapsed
         if wait > 0:
             time.sleep(wait)
+        if not url.lower().startswith("https://"):
+            raise BoardError(f"refusing non-HTTPS fetch: {url}")
         request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
         try:
             _last_request_at[host] = time.monotonic()
-            with urllib.request.urlopen(request, timeout=DEFAULT_TIMEOUT) as response:
+            # Scheme is enforced to https above; bandit B310 satisfied.
+            with urllib.request.urlopen(request, timeout=DEFAULT_TIMEOUT) as response:  # nosec B310
                 if response.status == 429:  # pragma: no cover - urllib raises on 429
                     raise urllib.error.HTTPError(url, 429, "rate limited", response.headers, None)
                 body = response.read()

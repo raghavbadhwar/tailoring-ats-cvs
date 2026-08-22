@@ -23,6 +23,16 @@ try:
 except ImportError:  # pragma: no cover - dev extra missing
     HAVE_HYPOTHESIS = False
 
+    def settings(*_args, **_kwargs):  # type: ignore[misc]
+        def decorate(func):
+            return func
+        return decorate
+
+    def given(*_args, **_kwargs):  # type: ignore[misc]
+        def decorate(func):
+            return func
+        return decorate
+
 from ats_agent.orchestrator import tailor  # noqa: E402
 from ats_agent.validation import validate_changes  # noqa: E402
 
