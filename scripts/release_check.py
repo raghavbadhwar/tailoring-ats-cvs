@@ -17,8 +17,22 @@ EXPECTED_VERSION = "1.0.0b3"
 
 
 def _run(*command: str) -> None:
-    completed = subprocess.run(command, cwd=ROOT, check=False)
+    """Run a gate script, keeping its output off this script's stdout.
+
+    ``release-check.json`` must contain exactly one JSON document, so gate
+    output is captured and only replayed when the gate fails.
+    """
+
+    completed = subprocess.run(
+        command,
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
     if completed.returncode:
+        sys.stdout.write(completed.stdout)
+        sys.stderr.write(completed.stderr)
         raise SystemExit(completed.returncode)
 
 

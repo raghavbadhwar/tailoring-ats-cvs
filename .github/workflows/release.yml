@@ -110,11 +110,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          if [ "$(cat release-check.json | python -c "import json,sys; print(json.load(sys.stdin)['protected_holdout']['executed'])")" = "True" ]; then
+          if [ "$(python -c "import json; print(json.load(open('release-check.json'))['protected_holdout']['executed'])")" = "True" ]; then
             HOLDOUT_NOTE="Protected 60-case private holdout: executed and passed."
           else
             HOLDOUT_NOTE="**PROTECTED HOLDOUT NOT EXECUTED.** Public Benchmark v3, full CI, and security gates passed; the private holdout gate is deferred for this beta and remains mandatory for stable v1.0.0."
           fi
+          gh release delete "$GITHUB_REF_NAME" --yes 2>/dev/null || true
           gh release create "$GITHUB_REF_NAME" \
             dist/*.whl dist/*.tar.gz dist/agent-adapters/* sbom.cdx.json SHA256SUMS release-check.json benchmarks/v3/reports/*.json \
             --repo "$GITHUB_REPOSITORY" \
