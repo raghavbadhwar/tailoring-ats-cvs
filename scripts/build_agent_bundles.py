@@ -49,6 +49,8 @@ def build_bundles(root: Path, output: Path) -> list[Path]:
     _archive(skill, root / ".agents/skills", list((root / ".agents/skills/tailor-cv").rglob("*")), "")
     files = [path for path in (root / ".agents").rglob("*") if path.is_file()]
     files += [root / ".claude-plugin/plugin.json", root / "bin/ats-cv", root / "bin/ats-cv.cmd"]
+    files += [root / ".claude-plugin/marketplace.json"]
+    files += [path for path in (root / "commands").rglob("*") if path.is_file()]
     _archive(plugin, root, files, "tailoring-ats-cvs")
     sums = output / "SHA256SUMS"
     sums.write_text("".join(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n" for path in (skill, plugin)), encoding="utf-8")

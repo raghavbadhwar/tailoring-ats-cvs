@@ -24,7 +24,7 @@ def validate_repository(root: Path) -> dict[str, object]:
         errors.append("invalid skill frontmatter or length")
     if "explicit approval" not in skill.lower() or "automatically approve" in skill.lower():
         errors.append("missing explicit change approval boundary")
-    if "--install" not in skill or "ask for permission" not in skill:
+    if "--install" not in skill or "explicit yes" not in skill:
         errors.append("missing explicit installation approval")
     if any("shell=True" in script.read_text(encoding="utf-8") for script in scripts):
         errors.append("shell=True in adapter script")
@@ -35,7 +35,7 @@ def validate_repository(root: Path) -> dict[str, object]:
     policy = json.loads(required[-1].read_text(encoding="utf-8"))
     if policy.get("requires_explicit_approval") is not True or "==1.0.0b3" not in str(policy.get("preferred_spec")):
         errors.append("unsafe bootstrap policy")
-    return {"errors": errors, "skill_name": "tailor-cv", "plugin_name": "tailoring-ats-cvs", "explicit_install_approval": "--install" in skill and "permission" in skill, "explicit_change_approval": "explicit approval" in skill.lower()}
+    return {"errors": errors, "skill_name": "tailor-cv", "plugin_name": "tailoring-ats-cvs", "explicit_install_approval": "--install" in skill and "explicit yes" in skill, "explicit_change_approval": "explicit approval" in skill.lower()}
 
 
 def main() -> int:

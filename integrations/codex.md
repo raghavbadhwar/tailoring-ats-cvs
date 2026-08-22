@@ -1,6 +1,17 @@
 # Codex
 
-The project skill lives at `.agents/skills/tailor-cv` and the portable ZIP can be installed or uploaded in a supported Codex environment. It delegates all CV operations to the CLI, asks permission before bootstrap installation, and requires explicit approval before apply.
+## Native install (recommended)
+
+```bash
+python scripts/install_codex_skill.py
+```
+
+Installs or upgrades `${CODEX_HOME:-~/.codex}/skills/tailor-cv` from this
+repository. It is idempotent, refuses downgrades without `--force`, and
+prints a ready-to-paste Codex prompt on success. `--check` reports the
+installed version; `--uninstall` removes it.
+
+Then paste into Codex:
 
 ```text
 Use the tailor-cv skill.
@@ -9,6 +20,9 @@ Job description: ./roles/company-analyst.md
 Evidence: ./career/project-bank.md
 Prepare the proposal and summarize the evidence mapping. Do not approve or apply changes until I send an explicit list of change IDs and variants.
 ```
+
+The skill delegates all CV operations to the CLI, asks permission before
+bootstrap installation, and requires explicit approval before apply.
 
 For restricted environments, use the pinned manual installation path in the skill’s installation reference.
 

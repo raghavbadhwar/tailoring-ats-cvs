@@ -25,10 +25,25 @@ def verify(output: Path) -> None:
     with zipfile.ZipFile(archives[0]) as archive:
         if "tailor-cv/SKILL.md" not in archive.namelist():
             raise ValueError("skill missing")
+        policy = json.loads(archive.read("tailor-cv/assets/bootstrap-policy.json"))
+        if policy.get("schema_version") != 2 or not policy.get("install_attempts"):
+            raise ValueError("skill bootstrap policy must be schema 2 with install attempts")
     with zipfile.ZipFile(archives[1]) as archive:
+        names = set(archive.namelist())
         manifest = json.loads(archive.read("tailoring-ats-cvs/.claude-plugin/plugin.json"))
         if manifest.get("skills") != ["./.agents/skills/tailor-cv"]:
             raise ValueError("plugin skill path mismatch")
+        marketplace = json.loads(archive.read("tailoring-ats-cvs/.claude-plugin/marketplace.json"))
+        if marketplace.get("name") != "raghavbadhwar" or not marketplace.get("plugins"):
+            raise ValueError("plugin marketplace manifest invalid")
+        entry = marketplace["plugins"][0]
+        if entry.get("name") != "tailoring-ats-cvs" or entry.get("source") != "./":
+            raise ValueError("marketplace plugin entry invalid")
+        command_members = [name for name in names
+                           if name.startswith("tailoring-ats-cvs/commands/")
+                           and name.endswith(".md")]
+        if "tailoring-ats-cvs/commands/tailor-cv.md" not in command_members:
+            raise ValueError("plugin slash command missing from bundle")
 
 
 def main() -> int:

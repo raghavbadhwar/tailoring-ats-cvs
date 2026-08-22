@@ -4,6 +4,22 @@
 
 ### Added
 
+- Native Claude Code distribution: self-hosted plugin marketplace
+  (`/plugin marketplace add raghavbadhwar/tailoring-ats-cvs`) and a bundled
+  `/tailor-cv` slash command driving the full approval-first flow.
+- Native Codex installer (`scripts/install_codex_skill.py`): idempotent
+  skill install into `$CODEX_HOME/skills` with version checks and
+  `--check/--uninstall/--force`.
+- Bootstrap v2: ordered install attempts (PyPI → pinned GitHub tag →
+  isolated venv) under one informed consent, with an install-state manifest
+  so the engine resolves even when no tier touches PATH.
+
+### Changed
+
+- `ensure_cli.py --check` now enumerates the full attempt chain and reports
+  how the executable was resolved; every status carries a human-readable
+  `message`.
+
 - Chat-first stderr summary for `propose`/`audit`: requirement coverage,
   supported changes with variants, refused gaps, and ready-to-paste
   next-step commands. stdout remains pure JSON; `--no-summary` suppresses.

@@ -1,11 +1,18 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "package_name": "tailoring-ats-cvs",
   "minimum_version": "1.0.0b3",
   "preferred_spec": "tailoring-ats-cvs[documents]==1.0.0b3",
   "git_fallback_spec": "git+https://github.com/raghavbadhwar/tailoring-ats-cvs.git@v1.0.0-beta.3",
   "executable": "ats-agent",
   "doctor_arguments": ["doctor", "--strict"],
-  "supported_installers": ["uv", "pipx"],
-  "requires_explicit_approval": true
+  "requires_explicit_approval": true,
+  "state_file": "~/.local/state/tailoring-ats-cvs/install.json",
+  "install_attempts": [
+    {"tier": "uv-pypi", "manager": "uv", "source_key": "preferred_spec"},
+    {"tier": "pipx-pypi", "manager": "pipx", "source_key": "preferred_spec"},
+    {"tier": "uv-git", "manager": "uv", "source_key": "git_fallback_spec"},
+    {"tier": "pipx-git", "manager": "pipx", "source_key": "git_fallback_spec"},
+    {"tier": "venv-pip", "manager": "venv", "source_key": "preferred_spec"}
+  ]
 }

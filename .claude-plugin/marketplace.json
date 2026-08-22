@@ -1,0 +1,25 @@
+{
+  "name": "raghavbadhwar",
+  "owner": {
+    "name": "Raghav Badhwar",
+    "url": "https://github.com/raghavbadhwar"
+  },
+  "description": "Raghav's plugins: approval-first, evidence-grounded tooling.",
+  "plugins": [
+    {
+      "name": "tailoring-ats-cvs",
+      "source": "./",
+      "description": "Approval-first, evidence-grounded CV tailoring through the local ats-agent CLI.",
+      "version": "1.0.0-beta.3",
+      "author": {
+        "name": "Raghav Badhwar",
+        "url": "https://github.com/raghavbadhwar"
+      },
+      "homepage": "https://github.com/raghavbadhwar/tailoring-ats-cvs",
+      "repository": "https://github.com/raghavbadhwar/tailoring-ats-cvs",
+      "license": "MIT",
+      "keywords": ["cv", "resume", "ats", "career", "job-application"],
+      "commands": ["./commands"]
+    }
+  ]
+}

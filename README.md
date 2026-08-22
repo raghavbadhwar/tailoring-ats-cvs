@@ -46,19 +46,37 @@ The trustworthy v1 engineering line is prepared as `1.0.0b3`. Beta publication i
 
 ## Agent entry points
 
-### Standalone CLI
+### Use it in 30 seconds
 
-Install a pinned release with `uv tool install "tailoring-ats-cvs[documents]==1.0.0b3"`, then use `ats-agent doctor --strict`.
+**Claude Code** (native plugin):
 
-### Claude Code
+```text
+/plugin marketplace add raghavbadhwar/tailoring-ats-cvs
+/plugin install tailoring-ats-cvs@raghavbadhwar
+```
 
-From a checkout run `claude --plugin-dir .`, then use `/tailoring-ats-cvs:tailor-cv`.
+Then run `/tailoring-ats-cvs:tailor-cv <cv-path> <job-description> [evidence...]`.
+On first use the skill asks once — "May I install the ats-agent engine?" —
+then installs and verifies the pinned engine automatically.
 
-### Codex
+**Codex** (native skill):
 
-Use the portable skill at `.agents/skills/tailor-cv`.
+```bash
+python scripts/install_codex_skill.py
+```
 
-All three paths require explicit approval of change IDs and variants before application. See [agent adapter instructions](docs/agent-adapters.md) for bootstrap security, release assets, and known local-only limits.
+Then paste: `Use the tailor-cv skill. CV: ./my-cv.docx Job description: ./jd.md`
+— same single-consent bootstrap applies inside Codex.
+
+**Standalone CLI** (no agent host):
+
+```bash
+uv tool install "tailoring-ats-cvs[documents]==1.0.0b3"   # or, until PyPI:
+uv tool install "git+https://github.com/raghavbadhwar/tailoring-ats-cvs.git@v1.0.0-beta.3"
+ats-agent doctor --strict
+```
+
+All three paths require explicit approval of change IDs and variants before application. The engine installer itself is also consent-gated: one prompt covers the ordered attempt chain (PyPI → GitHub tag → isolated venv). See [agent adapter instructions](docs/agent-adapters.md) for bootstrap security, release assets, and known local-only limits.
 
 The active upgrade is ordinary, reviewable source code. CI rejects encoded source payloads and workflows that reconstruct and push replacement source trees.
 
