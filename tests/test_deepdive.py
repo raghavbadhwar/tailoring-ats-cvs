@@ -174,5 +174,60 @@ class IsolationTests(unittest.TestCase):
         self.assertEqual(statuses["lever"], "ACT NOW")
 
 
+class DeepDiveBranchTests(unittest.TestCase):
+    def test_careers_fallback_success_and_failure(self):
+        from ats_agent.deepdive import BoardError, deep_dive
+
+        def fake_capture(url, destination, *, source_type):
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text(
+                "We are hiring. Join our team. Analysts welcome.\n",
+                encoding="utf-8")
+            return {"url": url, "path": str(destination), "sha256": "x",
+                    "captured_at": "2026-08-23T00:00:00+00:00",
+                    "method": "scrapling_public_https",
+                    "source_type": source_type,
+                    "extraction_status": "captured"}
+
+        with patch("ats_agent.deepdive.capture_url", side_effect=fake_capture):
+            payload = deep_dive("https://acme.example.com/careers",
+                                aspire="analyst", writer=lambda _t: None)
+        self.assertEqual(payload["mode"], "careers_page")
+        self.assertGreater(payload["analysis"]["marker_hits"], 0)
+
+        from ats_agent.capture import CaptureError
+        def failing(url, destination, *, source_type):
+            raise CaptureError("connection reset")
+        with patch("ats_agent.deepdive.capture_url", side_effect=failing):
+            with self.assertRaises(BoardError):
+                deep_dive("https://acme.example.com/careers",
+                          writer=lambda _t: None)
+
+    def test_cards_and_helpers(self):
+        from ats_agent import deepdive as D
+        self.assertEqual(D._provider_url("greenhouse", "acme"),
+                         "https://boards-api.greenhouse.io/v1/boards/acme/jobs?content=true")
+        self.assertEqual(D._clean_lines("a\n\nA \n b"), "a\nb")
+        results = [{
+            "source": "greenhouse:x", "verdict": "COLD", "reasons": ["r"],
+            "deltas": [],
+            "analysis": {"direct_matches": [{"role": "R", "url": "u",
+                                             "age_days": 3}]},
+            "internship_program": {"program_evidence": True,
+                                   "intern_open_now": 1,
+                                   "intern_titles_seen": ["T"]},
+        }]
+        card = D._card(results, "data analyst")
+        self.assertIn("⚪ COLD", card)
+        fb = D._card_fallback("s", {"method": "m", "captured_at": "n"},
+                              {"marker_hits": 0, "hiring_markers": [],
+                               "vocabulary_on_page": []})
+        self.assertIn("no hiring language", fb)
+
+    def test_days_since_garbage(self):
+        from ats_agent.deepdive import _days_since
+        self.assertIsNone(_days_since("not-a-date"))
+        self.assertIsNone(_days_since(""))
+
 if __name__ == "__main__":
     unittest.main()
