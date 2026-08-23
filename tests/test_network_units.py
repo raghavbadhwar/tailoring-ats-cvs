@@ -53,7 +53,6 @@ class CaptureCacheTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             cache = Path(tmp) / "cache"
             recorded = []
-            real = capture_cached.__globals__["capture_url"]
 
             def fake_capture(url, destination, *, source_type):
                 recorded.append(url)
