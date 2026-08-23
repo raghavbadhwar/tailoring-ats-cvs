@@ -8,3 +8,4 @@ build/
 benchmarks/v3/reports/
 dist/agent-adapters/
 .career-cv/
+deep-dive-matches.json
