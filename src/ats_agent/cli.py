@@ -229,7 +229,51 @@ def _error_exit_code(exc: Exception) -> int:
     return 2
 
 
+EVIDENCE_TEMPLATE = """# Candidate Evidence — <your name>
+
+> Everything ats-agent may put on your CV must be entailed by this file.
+> One bullet per provable claim; write facts you can defend in an interview.
+
+## Identity
+- candidate-id: <short-lowercase-id>
+
+## Experience
+- <Role, Company, dates>: what you did, with numbers (users %, hours saved, scale).
+
+## Projects
+- <Project>: what it does, your specific contribution, measurable outcome.
+
+## Education
+- <Degree>, <Institution>, <years>, <grade>.
+
+## Skills (with honest level)
+- <Skill>: <level and where you used it>.
+
+## Certifications
+- <Name, issuer, year>  # delete section if none
+
+## Explicit non-evidence
+# Postings may assume things you have NOT done. Listing them makes the tool
+# refuse to add them — that protection works only if you declare them.
+- No <skill>.
+"""
+
+
+FRIENDLY_START = """ats-agent — approval-first CV tailoring
+
+three ways in:
+  tailor     <cv> <jd-or-url> --run-dir runs/x [--interactive]
+  deep-dive  <board-url | company-slug> --aspire "<role>" --watch
+  evidence   new --out my-evidence.md
+
+run `ats-agent <command> --help` for details."""
+
+
 def main(argv: list[str] | None = None) -> int:
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if not arguments:
+        print(FRIENDLY_START)
+        return 0
     parser = argparse.ArgumentParser(prog="ats-agent")
     parser.add_argument("--version", action="version", version=__version__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -328,6 +372,26 @@ def main(argv: list[str] | None = None) -> int:
         help="override watchlist location (default ~/.local/state/tailoring-ats-cvs/watchlist.json)",
     )
     dive.add_argument("--max-boards", type=int, default=10)
+    dive.add_argument(
+        "--save-matches",
+        help="where to write the research-export JSON of direct matches "
+             "(default ./deep-dive-matches.json)",
+    )
+    dive.add_argument(
+        "--quiet", action="store_true",
+        help="suppress the card (cron mode); exit code 3 signals board changes",
+    )
+
+    evidence = sub.add_parser(
+        "evidence",
+        help="candidate-evidence helpers",
+    )
+    evidence_sub = evidence.add_subparsers(dest="evidence_command", required=True)
+    evidence_new = evidence_sub.add_parser(
+        "new", help="scaffold a guided evidence file",
+    )
+    evidence_new.add_argument("--out", required=True)
+    evidence_new.add_argument("--force", action="store_true")
 
     research = sub.add_parser(
         "research-jobs",
@@ -530,7 +594,14 @@ def main(argv: list[str] | None = None) -> int:
                     else DEFAULT_WATCHLIST_PATH
                 ),
                 max_boards=int(args.max_boards),
+                save_matches=(
+                    Path(args.save_matches) if args.save_matches else None
+                ),
+                quiet=bool(args.quiet),
             )
+            if getattr(args, "quiet", False):
+                changed = bool(payload.get("changed"))
+                return 3 if changed else 0
 
         elif args.command == "prepare":
             proposal = _proposal_from_args(args)
@@ -563,6 +634,19 @@ def main(argv: list[str] | None = None) -> int:
                 provider=provider,
                 selected_job_ids=args.job_id,
             )
+        elif args.command == "evidence":
+            out = Path(args.out).expanduser().resolve()
+            if out.exists() and not args.force:
+                payload = {"status": "blocked",
+                           "error": f"{out} exists; pass --force to overwrite"}
+            else:
+                out.parent.mkdir(parents=True, exist_ok=True)
+                out.write_text(EVIDENCE_TEMPLATE, encoding="utf-8")
+                payload = {"status": "written", "path": str(out),
+                           "hint": ("Fill every section with facts you can "
+                                    "defend in an interview; ats-agent uses "
+                                    "this as the only source of truth for "
+                                    "what may appear on your CV.")}
         else:
             payload = apply_manifest(Path(args.approval_manifest))
     except (ValueError, OSError, json.JSONDecodeError, TailorBlocked, DeepDiveBoardError) as exc:

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import unicodedata
 import re
 import sys
 import tempfile
@@ -117,6 +118,8 @@ def analyze_roles(jobs: list[dict[str, Any]], vocab: list[str]) -> dict[str, Any
         entry = {
             "role": job.get("role"),
             "url": job.get("job_url") or job.get("hostedUrl"),
+            "description": str(job.get("description") or ""),
+            "company": str(job.get("company") or ""),
             "matched_terms": hits[:8],
             "title_match": bool(title_hits),
             "age_days": round(age) if age is not None else None,
@@ -295,6 +298,12 @@ def _clean_lines(text: str) -> str:
     return "\n".join(lines)
 
 
+def _slug(text: str) -> str:
+    normalized = unicodedata.normalize("NFKD", str(text)).encode("ascii", "ignore").decode()
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", normalized).strip("-").lower()
+    return slug[:40] or "role"
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -330,9 +339,13 @@ def deep_dive(
     watch: bool = False,
     watchlist_path: Path = DEFAULT_WATCHLIST_PATH,
     max_boards: int = 10,
+    save_matches: Path | None = None,
+    quiet: bool = False,
     writer: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
-    writer = writer or (lambda text: print(text, file=sys.stderr))
+    writer = (lambda _text: None) if quiet else (
+        writer or (lambda text: print(text, file=sys.stderr))
+    )
     vocab = expand_aspiration(aspire) if aspire else []
     stripped = source.strip()
 
@@ -411,7 +424,8 @@ def deep_dive(
         card = _card_fallback(stripped, page_fallback, page)
         print(card, file=sys.stderr)
         return {"status": "completed", "mode": "careers_page",
-                "analysis": page, "card": card}
+                "analysis": page, "card": card, "changed": False,
+                "matches_file": None, "match_count": 0, "next_hint": ""}
 
     if not probes:
         raise BoardError(f"could not resolve a probe target from {stripped!r}")
@@ -427,10 +441,46 @@ def deep_dive(
         else:
             result["deltas"] = []
 
+    export_jobs: list[dict[str, Any]] = []
+    for result in probes:
+        company = result["source"].split(":", 1)[1]
+        for match in result["analysis"].get("direct_matches", []):
+            if not match.get("url"):
+                continue
+            export_jobs.append({
+                "id": f"{result['source']}-{_slug(match['role'] or 'role')}",
+                "company": match.get("company") or company,
+                "role": match["role"],
+                "job_url": match["url"],
+                "description": match.get("description", ""),
+                "source": "deep_dive",
+            })
+    IGNORED_DELTAS = ("no change", "first snapshot")
+    changed = any(
+        any(not d.startswith(IGNORED_DELTAS) for d in r.get("deltas", []))
+        for r in probes
+    )
+    matches_path = save_matches or Path("deep-dive-matches.json")
+    next_hint = ""
+    if export_jobs:
+        matches_path.write_text(
+            json.dumps({"jobs": export_jobs}, indent=1) + "\n", encoding="utf-8"
+        )
+        next_hint = (
+            'next → ats-agent tailor <your-cv> "'
+            + str(matches_path)
+            + '" --run-dir runs/deep-dive --approve-from approvals.json'
+        )
     card = _card(probes, aspire)
-    print(card, file=sys.stderr)
+    if not quiet:
+        print(card, file=sys.stderr)
+        if next_hint:
+            print(next_hint, file=sys.stderr)
     return {"status": "completed", "mode": "boards",
-            "aspire": aspire, "results": probes, "card": card}
+            "aspire": aspire, "results": probes, "card": card,
+            "matches_file": str(matches_path) if export_jobs else None,
+            "match_count": len(export_jobs),
+            "changed": changed, "next_hint": next_hint}
 
 
 # --------------------------------------------------------------------------

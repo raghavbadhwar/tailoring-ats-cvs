@@ -57,6 +57,9 @@ aspiration: 🟢 ACT NOW (matching openings) · 🟡 WATCH CLOSELY (fresh adjace
 hiring) · 🟠 ON RADAR (postings but nothing near yet) · ⚪ NO SIGNAL.
 `--watch` persists snapshots and reports deltas on every re-run ("postings
 grew 3 → 5"), turning company research into a measurable cadence.
+Cron it: `--quiet --watch` exits 3 only when a board changes, so weekly
+automation can alert on signal alone. When matches exist, deep-dive writes
+`deep-dive-matches.json` and prints the exact tailor command to run next.
 
 ## Agent entry points
 

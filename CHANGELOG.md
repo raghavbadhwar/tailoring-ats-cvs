@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Added
+- Usability pass: `deep-dive` now writes a research-export of direct matches
+  (`deep-dive-matches.json`) and prints the exact tailor command — closing the
+  discovery→tailoring loop; `--quiet` cron mode with machine exit codes
+  (3 = board changed); friendly three-door card on bare `ats-agent`;
+  `ats-agent evidence new` scaffolds a guided evidence file with overwrite
+  protection.
+
 - `ats-agent deep-dive`: company hiring-momentum intelligence from public ATS
   syndication feeds — aspiration matching, adjacency momentum, internship-
   program signals, four-tier verdicts (ACT NOW / WATCH CLOSELY / ON RADAR /
