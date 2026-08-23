@@ -73,6 +73,14 @@ jobs:
             "$run_dir/approval.json" > /dev/null
           coverage run --append --source=ats_agent -m ats_agent.cli validate \
             "$run_dir/tailored-resume.txt" > /dev/null
+          printf '{"*": ["*"]}' > "$run_dir/approvals-map.json"
+          coverage run --append --source=ats_agent -m ats_agent.cli tailor \
+            examples/sample_resume.txt examples/sample_job.md \
+            --evidence examples/sample_project_bank.md \
+            --candidate-id coverage-candidate \
+            --run-dir "$run_dir/tailor" \
+            --approve-from "$run_dir/approvals-map.json" \
+            --no-verify-live > /dev/null
           coverage run --append --source=ats_agent -m ats_agent.cli benchmark \
             --suite smoke --report "$run_dir/smoke.json" > /dev/null
           coverage report --show-missing --fail-under=90

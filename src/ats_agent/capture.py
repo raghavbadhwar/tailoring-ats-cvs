@@ -134,6 +134,7 @@ def capture_url(
     """Capture one public page with retry and extraction-mode fallback."""
 
     executable = require_scrapling()
+    destination.parent.mkdir(parents=True, exist_ok=True)
     last_error: Exception | None = None
     for attempt in range(1, max(1, attempts) + 1):
         ai_targeted = attempt % 2 == 1  # alternate focused/default extraction
@@ -205,11 +206,14 @@ def fetch_many(
 ) -> list[dict[str, object] | CaptureError]:
     """Capture several URLs with bounded concurrency, preserving order."""
 
-    def run(item: tuple[str, Path]) -> dict[str, object]:
+    def run(item: tuple[str, Path]) -> dict[str, object] | CaptureError:
         url, destination = item
-        if use_cache and cache_dir is not None:
-            return capture_cached(url, cache_dir, source_type=source_type)
-        return capture_url(url, destination, source_type=source_type)
+        try:
+            if use_cache and cache_dir is not None:
+                return capture_cached(url, cache_dir, source_type=source_type)
+            return capture_url(url, destination, source_type=source_type)
+        except CaptureError as exc:
+            return exc
 
     workers = max(1, min(workers, 4))
     with ThreadPoolExecutor(max_workers=workers) as pool:
