@@ -3,6 +3,14 @@
 ## Unreleased
 
 ### Added
+- `ats-agent deep-dive`: company hiring-momentum intelligence from public ATS
+  syndication feeds — aspiration matching, adjacency momentum, internship-
+  program signals, four-tier verdicts (ACT NOW / WATCH CLOSELY / ON RADAR /
+  NO SIGNAL), careers-page capture fallback, and a persistent watchlist with
+  delta reporting between runs.
+- Plural-tolerant aspiration matching; multi-word aspirations suppress their
+  own generic sub-tokens so only the phrase drives direct matches.
+
 - `ats-agent tailor`: one-door orchestrator (propose→approve→apply→validate
   in one session) with explicit `--interactive` / `--approve-from` modes,
   crash-safe versioned run journal, digest idempotency ("already tailored"),

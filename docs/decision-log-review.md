@@ -34,3 +34,16 @@ Final disposition: **APPROVED** with the resolutions below baked in.
 The hand-built alias table covers 100% of requirement-like lines across all
 12 real internship postings. ESCO enrichment is therefore **rejected for
 now** and revisits only if a future corpus re-measurement crosses 15%.
+
+## Addendum — deep-dive mechanism (2026-08-23)
+
+- Discovery boundary refined: official ATS *syndication feeds* are treated as
+  structured public data (they exist to be read), distinct from board scraping;
+  Scrapling remains the labelled fallback for plain careers pages.
+- Verdict honesty: ATS feeds expose only currently-published postings, so
+  "internship program evidence" reflects live titles; closed-cohort history is
+  out of scope and never claimed.
+- Multi-word aspirations suppress their own sub-tokens ("data" ⊂ "data
+  analyst") so generic single words cannot manufacture direct matches.
+- Partial-failure isolation: one dead feed yields NO_SIGNAL for that company;
+  the rest of a multi-board dive completes.

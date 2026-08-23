@@ -44,6 +44,20 @@ It does **not** invent qualifications, autonomously submit applications, or clai
 
 The trustworthy v1 engineering line is prepared as `1.0.0b4`. Beta publication is fail-closed: the branch must pass CI, security, Benchmark v3, cross-platform compatibility, clean-wheel installation, and a protected 60-case private holdout before the `v1.0.0-beta.4` tag can publish a GitHub prerelease.
 
+## Company deep-dive — target companies that haven't posted yet
+
+```bash
+ats-agent deep-dive https://boards.greenhouse.io/stripe --aspire "data analyst" --watch
+ats-agent deep-dive stripe            # bare slug probes Greenhouse/Lever/Ashby
+ats-agent deep-dive company.com/careers   # non-ATS fallback (labelled capture)
+```
+
+Reads public ATS syndication feeds and scores hiring momentum for your
+aspiration: 🟢 ACT NOW (matching openings) · 🟡 WATCH CLOSELY (fresh adjacent
+hiring) · 🟠 ON RADAR (postings but nothing near yet) · ⚪ NO SIGNAL.
+`--watch` persists snapshots and reports deltas on every re-run ("postings
+grew 3 → 5"), turning company research into a measurable cadence.
+
 ## Agent entry points
 
 ### Use it in 30 seconds

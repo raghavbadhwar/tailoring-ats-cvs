@@ -10,6 +10,9 @@ from pathlib import Path
 from . import __version__
 from .summary import render_proposal_summary
 from .doctor import _doctor, _strict_doctor_check  # noqa: F401 - re-exported contract
+from .deepdive import DEFAULT_WATCHLIST_PATH
+from .deepdive import BoardError as DeepDiveBoardError
+from .deepdive import deep_dive as _run_deep_dive
 from .orchestrator import TailorBlocked, tailor as _run_tailor
 from .benchmark import (
     BenchmarkGateError,
@@ -301,6 +304,31 @@ def main(argv: list[str] | None = None) -> int:
         help="skip re-checking captured postings before apply",
     )
 
+    dive = sub.add_parser(
+        "deep-dive",
+        help="hiring-momentum intelligence for a company: ATS board analysis, "
+             "aspiration matching, internship-program signals, watchlist deltas",
+    )
+    dive.add_argument(
+        "source",
+        help="ATS board URL (Greenhouse/Lever/Ashby), bare company slug, "
+             "newline-separated board list, or careers-page URL",
+    )
+    dive.add_argument(
+        "--aspire", default="",
+        help="aspired role phrase, e.g. 'data analyst' — drives match scoring",
+    )
+    dive.add_argument(
+        "--watch", action="store_true",
+        help="persist a snapshot and report deltas against previous checks",
+    )
+    dive.add_argument(
+        "--watchlist-path",
+        default=None,
+        help="override watchlist location (default ~/.local/state/tailoring-ats-cvs/watchlist.json)",
+    )
+    dive.add_argument("--max-boards", type=int, default=10)
+
     research = sub.add_parser(
         "research-jobs",
         help="research a JSON or Career-Ops Markdown list of public jobs",
@@ -489,6 +517,21 @@ def main(argv: list[str] | None = None) -> int:
                 force=bool(args.force),
                 rewrite_provider=provider,
             )
+        elif args.command == "deep-dive":
+            from pathlib import Path as _P
+
+            payload = _run_deep_dive(
+                args.source,
+                aspire=args.aspire,
+                watch=bool(args.watch),
+                watchlist_path=(
+                    _P(args.watchlist_path).expanduser()
+                    if args.watchlist_path
+                    else DEFAULT_WATCHLIST_PATH
+                ),
+                max_boards=int(args.max_boards),
+            )
+
         elif args.command == "prepare":
             proposal = _proposal_from_args(args)
             out = Path(args.out).expanduser().resolve()
@@ -522,7 +565,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         else:
             payload = apply_manifest(Path(args.approval_manifest))
-    except (ValueError, OSError, json.JSONDecodeError, TailorBlocked) as exc:
+    except (ValueError, OSError, json.JSONDecodeError, TailorBlocked, DeepDiveBoardError) as exc:
         print(
             json.dumps(
                 {"status": "blocked", "error": str(exc)},
