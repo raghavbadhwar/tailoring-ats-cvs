@@ -1,24 +1,28 @@
 # Roadmap
 
-## v1.1 — current foundation
+## v0.9 — evidence-grounded usability release
 
-- CI for skill validation, tests, and Python lint/compile checks.
-- Versioned benchmark case schema with hallucination and evidence-preservation metrics.
-- Dependency-free CLI contract for `audit`, `propose`, and approval-gated `apply`.
-- Deterministic multi-agent report contract spanning ATS, role, language, recruiter, hiring-manager, and evidence review.
-- Formatting audit for extractable text, reading order, spacing, bullets, and section headings.
-- Integration boundaries for skill-compatible clients.
+- Candidate-scoped provenance ledger and ownership protection.
+- Hard-gate and requirement extraction with source spans.
+- Requirement-to-evidence mapping.
+- Evidence-backed conservative, balanced, and compact rewrite variants.
+- Local Markdown/HTML approval review.
+- Anchored text and DOCX preserve/rebuild editing.
+- Re-parse, diff, hashes, audit log, and parser-risk validation.
+- 100-case benchmark and CI safety gates.
 
-## v1.2 — evidence adapters
+## v1.0 — stable release criteria
 
-- Read-only PDF/DOCX/TXT extraction adapters with per-file diagnostics.
-- Deterministic requirement/evidence matrix and change proposal serialization.
-- Golden fixtures with anonymized CV/JD pairs and human-reviewed expected outcomes.
+- Expand the skill taxonomy and human-labelled rewrite set.
+- Add complex DOCX fixture coverage for mixed runs, hyperlinks, tables, and multi-section documents.
+- Add a reviewed optional model-provider adapter behind the same deterministic validators.
+- Run a human preference study and publish methodology before making quality claims.
 
-## v2.0 — reviewed integrations
+## Later, only after v1.0 safety gates
 
-- Optional Codex/ChatGPT and Claude loaders.
-- VS Code command surface and local web dashboard backed by the same CLI contract.
-- Human evaluation study before claiming improvement in screening outcomes.
+- Authenticated local web application.
+- VS Code integration.
+- Additional document templates.
+- Opt-in official-company context retrieval.
 
-Out of scope until evidence supports it: automatic application submission, a universal ATS score, and autonomous edits.
+Out of scope: automatic application submission, autonomous approval, and universal ATS or employer-acceptance scores.

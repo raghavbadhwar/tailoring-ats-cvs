@@ -1,5 +1,9 @@
 {
-  "approved_change_ids": ["C1", "C3"],
-  "source": "proposal.json",
-  "notes": "Only explicitly approved IDs may be applied."
+  "proposal": "proposal.json",
+  "selections": [
+    {"change_id": "C1", "variant_id": "balanced"}
+  ],
+  "approved_change_ids": ["C1"],
+  "document_mode": "preserve",
+  "output": "tailored-resume.txt"
 }

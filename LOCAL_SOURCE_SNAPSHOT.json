@@ -1,0 +1,17 @@
+{
+  "project": "Tailoring ATS",
+  "copy_id": "tailoring-ats-02",
+  "snapshot_date": "2026-10-19",
+  "original_local_head": "0e1d5d69b6ad10a9e7c05cb1e7c6bd776c47ce41",
+  "original_history_included": true,
+  "scope": "Reviewed current source snapshot, not a full disk backup. Dependencies, generated builds, private data, credentials and workflow execution definitions omitted. No build or production-readiness claim.",
+  "source_file_count": 73,
+  "source_manifest_sha256": "efda2324aad64cb87e3f16593494a582699d3bedd1758f20678b7334af466b99",
+  "exclusion_reason_counts": {
+    "generated_dependency_or_filesystem_metadata": 5,
+    "workflow_execution_prevention": 3,
+    "runtime_dataset": 1,
+    "data_payload_not_source": 3
+  },
+  "original_source_untouched": true
+}
