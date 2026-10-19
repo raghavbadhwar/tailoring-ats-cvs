@@ -1,0 +1,392 @@
+"""Rewrite provider contracts with a deterministic offline implementation."""
+from __future__ import annotations
+
+import json
+import re
+import subprocess
+import copy
+import hashlib
+from dataclasses import asdict, dataclass
+from threading import Event, Lock
+from typing import Protocol, runtime_checkable
+
+
+@dataclass(frozen=True)
+class RewriteContext:
+    """Minimal, fact-bounded context supplied to a rewrite provider."""
+
+    original_text: str
+    terms: tuple[str, ...] = ()
+    target_section: str = "projects"
+    max_characters: int = 500
+    evidence_ids: tuple[str, ...] = ()
+    ownership_ceiling: str = "contributor"
+
+    def __post_init__(self) -> None:
+        if not self.original_text.strip():
+            raise ValueError("original_text is required")
+        if self.max_characters < 20:
+            raise ValueError("max_characters must be at least 20")
+
+
+@runtime_checkable
+class RewriteProvider(Protocol):
+    provider_id: str
+    provider_version: str
+
+    def generate(self, context: RewriteContext) -> list[dict]: ...
+
+
+def rewrite_provider_identity(provider: RewriteProvider) -> dict[str, str]:
+    """Bind resumable work to provider configuration without persisting it."""
+
+    configuration = tuple(
+        sorted((str(name), repr(value)) for name, value in getattr(provider, "__dict__", {}).items())
+    )
+    return {
+        "type": f"{type(provider).__module__}.{type(provider).__qualname__}",
+        "id": provider.provider_id,
+        "version": provider.provider_version,
+        "configuration_sha256": hashlib.sha256(
+            json.dumps(configuration, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        ).hexdigest(),
+    }
+
+
+class RewriteCache:
+    """Coalesce identical provider contexts for one unchanged batch only."""
+
+    def __init__(self) -> None:
+        self._values: dict[str, tuple[list[dict], str, str, str | None]] = {}
+        self._pending: dict[str, Event] = {}
+        self._lock = Lock()
+        # A provider may track mutable call counters in ``__dict__``. Snapshot
+        # its secret-safe configuration before the first invocation so those
+        # counters do not turn identical in-run requests into new contexts.
+        # Retaining the object also prevents an ``id`` reuse during this
+        # short-lived, per-batch cache.
+        self._provider_identities: dict[int, tuple[RewriteProvider, dict[str, str]]] = {}
+        self._provider_invocations = 0
+        self._cache_hits = 0
+        self._coalesced_waits = 0
+
+    def _provider_identity(self, provider: RewriteProvider) -> dict[str, str]:
+        """Return the first safe configuration snapshot for this provider object."""
+
+        token = id(provider)
+        with self._lock:
+            cached = self._provider_identities.get(token)
+            if cached is None or cached[0] is not provider:
+                identity = rewrite_provider_identity(provider)
+                self._provider_identities[token] = (provider, identity)
+                return identity
+            return cached[1]
+
+    def _key(self, provider: RewriteProvider, context: RewriteContext) -> str:
+        payload = {
+            "provider": self._provider_identity(provider),
+            "context": asdict(context),
+        }
+        return hashlib.sha256(
+            json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        ).hexdigest()
+
+    def generate(
+        self,
+        provider: RewriteProvider,
+        context: RewriteContext,
+    ) -> tuple[list[dict], str, str, str | None]:
+        """Return a defensive copy; concurrent equal requests share one call."""
+
+        key = self._key(provider, context)
+        while True:
+            with self._lock:
+                cached = self._values.get(key)
+                if cached is not None:
+                    self._cache_hits += 1
+                    return copy.deepcopy(cached)
+                pending = self._pending.get(key)
+                if pending is None:
+                    pending = Event()
+                    self._pending[key] = pending
+                    self._provider_invocations += 1
+                    break
+                self._coalesced_waits += 1
+            pending.wait()
+        try:
+            result = _generate_with_fallback(provider, context)
+        except BaseException:
+            with self._lock:
+                self._pending.pop(key, None)
+                pending.set()
+            raise
+        with self._lock:
+            self._values[key] = copy.deepcopy(result)
+            self._pending.pop(key, None)
+            pending.set()
+        return copy.deepcopy(result)
+
+    def stats(self) -> dict[str, int]:
+        with self._lock:
+            return {
+                "provider_invocations": self._provider_invocations,
+                "cache_hits": self._cache_hits,
+                "coalesced_waits": self._coalesced_waits,
+                "unique_contexts": len(self._values),
+            }
+
+
+_GENERIC_PREFIXES = (
+    r"^Results[- ]driven\s+",
+    r"^Innovative\s+",
+    r"^Passionate about\s+",
+    r"^Cutting[- ]edge\s+",
+)
+
+
+def _safe_ownership_language(text: str) -> str:
+    """Use an equivalent contribution verb without increasing ownership."""
+
+    rules = (
+        (r"^Helped\s+build\b", "Contributed to building"),
+        (r"^Helped\b", "Contributed to"),
+        (r"^Worked\s+on\b", "Contributed to"),
+        (r"^Supported\b", "Contributed to"),
+        (r"^Contributed\s+to\s+building\b", "Helped build"),
+        (r"^Contributed\s+to\b", "Supported"),
+        (r"^Assisted\s+with\b", "Supported"),
+        (r"^Assisted\b", "Supported"),
+        (r"^Participated\s+in\b", "Contributed to"),
+        (r"^Collaborated\s+on\b", "Contributed to"),
+        (r"^Responsible\s+for\b", "Contributed to"),
+    )
+    for pattern, replacement in rules:
+        updated = re.sub(pattern, replacement, text, count=1, flags=re.IGNORECASE)
+        if updated != text:
+            return updated
+    return text
+
+
+def _remove_generic(text: str) -> str:
+    result = text.strip()
+    for pattern in _GENERIC_PREFIXES:
+        result = re.sub(pattern, "", result, count=1, flags=re.IGNORECASE)
+    result = re.sub(
+        r"\b(?:leveraged|utilized)\s+AI\b",
+        "used AI",
+        result,
+        flags=re.IGNORECASE,
+    )
+    return re.sub(r"\s+", " ", result).strip()
+
+
+def _surface_term(text: str, term: str) -> str:
+    if term.lower() in text.lower():
+        return text
+    replacements: dict[str, tuple[tuple[str, str], ...]] = {
+        "workflow automation": (
+            (
+                r"(?:building\s+)?automated\s+order\s+workflows",
+                "workflow automation for orders",
+            ),
+            (
+                r"(?:building\s+)?automated\s+procurement\s+workflows",
+                "workflow automation for procurement",
+            ),
+            (r"automated\s+workflows", "workflow automation"),
+            (r"workflow\s+systems", "workflow automation systems"),
+        ),
+        "human-in-the-loop": (
+            (r"approval-first", "human-in-the-loop"),
+            (r"approval[- ]gated", "human-in-the-loop"),
+            (r"human approval", "human-in-the-loop approval"),
+        ),
+        "product requirements": (
+            (r"\bPRD\b", "product requirements document (PRD)"),
+        ),
+        "retrieval-augmented generation": (
+            (r"\bRAG\b", "retrieval-augmented generation (RAG)"),
+        ),
+        "git": ((r"\bGitHub\b", "Git/GitHub"),),
+    }
+    for pattern, replacement in replacements.get(term, ()):
+        updated = re.sub(pattern, replacement, text, count=1, flags=re.IGNORECASE)
+        if updated != text:
+            return updated
+    return text
+
+
+def _balanced_structure(text: str) -> str:
+    """Vary sentence structure without introducing a new factual claim."""
+
+    if "; " in text:
+        head, _, tail = text.partition("; ")
+        tail = tail.strip()
+        if (
+            tail
+            and tail[0].isalpha()
+            and not tail.lower().startswith(("with", "without"))
+        ):
+            return f"{head}. {tail[0].upper()}{tail[1:]}"
+    if " for " in text:
+        return text.replace(" for ", " to support ", 1)
+    if ", with " in text:
+        return text.replace(", with ", "; with ", 1)
+    return text
+
+
+def _compact(text: str) -> str:
+    result = re.sub(
+        r"\b(?:successfully|various|multiple|really|very)\b",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
+    result = re.sub(
+        r"\bin order to\b",
+        "to",
+        result,
+        flags=re.IGNORECASE,
+    )
+    result = re.sub(
+        r"\butili[sz]ing\b",
+        "using",
+        result,
+        flags=re.IGNORECASE,
+    )
+    result = re.sub(
+        r"workflow automation for orders",
+        "order-workflow automation",
+        result,
+        flags=re.IGNORECASE,
+    )
+    result = re.sub(
+        r"workflow automation for procurement",
+        "procurement-workflow automation",
+        result,
+        flags=re.IGNORECASE,
+    )
+    result = re.sub(
+        r"^Contributed\s+to\s+building\b",
+        "Contributed to",
+        result,
+        count=1,
+        flags=re.IGNORECASE,
+    )
+    if ", with " in result:
+        head, _, _ = result.partition(", with ")
+        result = head.rstrip(" .") + "."
+    elif "; with " in result:
+        head, _, _ = result.partition("; with ")
+        result = head.rstrip(" .") + "."
+    return re.sub(r"\s+", " ", result).strip()
+
+
+class DeterministicRewriteProvider:
+    """Offline provider using controlled, reviewable transformations only."""
+
+    provider_id = "deterministic"
+    provider_version = "1.0.0"
+
+    def generate(self, context: RewriteContext) -> list[dict]:
+        conservative = _safe_ownership_language(
+            _remove_generic(context.original_text)
+        )
+        balanced = conservative
+        for term in dict.fromkeys(context.terms):
+            balanced = _surface_term(balanced, term)
+        if balanced == conservative:
+            balanced = _balanced_structure(balanced)
+        compact = _compact(balanced)
+
+        variants: list[dict] = []
+        for variant_id, text in (
+            ("conservative", conservative),
+            ("balanced", balanced),
+            ("compact", compact),
+        ):
+            normalized = re.sub(r"\s+", " ", text).strip()
+            if not normalized or len(normalized) > context.max_characters:
+                continue
+            if any(existing["text"] == normalized for existing in variants):
+                continue
+            variants.append({"id": variant_id, "text": normalized})
+        return variants
+
+
+class CommandRewriteProvider:
+    """Optional local JSON subprocess provider with no shell execution."""
+
+    provider_id = "command"
+    provider_version = "1.0.0"
+
+    def __init__(self, command: tuple[str, ...], *, timeout_seconds: float = 20.0):
+        if not command:
+            raise ValueError("command is required")
+        if timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive")
+        self.command = command
+        self.timeout_seconds = timeout_seconds
+
+    def generate(self, context: RewriteContext) -> list[dict]:
+        completed = subprocess.run(
+            self.command,
+            input=json.dumps(asdict(context)),
+            capture_output=True,
+            check=True,
+            text=True,
+            timeout=self.timeout_seconds,
+            shell=False,
+        )
+        payload = json.loads(completed.stdout)
+        if not isinstance(payload, list):
+            raise ValueError("command provider must return a JSON list")
+        variants: list[dict] = []
+        for item in payload:
+            if not isinstance(item, dict):
+                raise ValueError("command provider variants must be objects")
+            variant_id = str(item.get("id") or "")
+            text = str(item.get("text") or "").strip()
+            if variant_id not in {"conservative", "balanced", "compact"}:
+                raise ValueError(f"unsupported variant id: {variant_id}")
+            if not text or len(text) > context.max_characters:
+                raise ValueError("command provider returned invalid variant text")
+            variants.append({"id": variant_id, "text": text})
+        return variants
+
+
+def _generate_with_fallback(
+    provider: RewriteProvider,
+    context: RewriteContext,
+) -> tuple[list[dict], str, str, str | None]:
+    """Use the selected provider and fail safely to deterministic output."""
+
+    try:
+        variants = provider.generate(context)
+        if not variants:
+            raise ValueError("provider returned no rewrite variants")
+        return (
+            variants,
+            provider.provider_id,
+            provider.provider_version,
+            None,
+        )
+    except (OSError, ValueError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
+        fallback = DeterministicRewriteProvider()
+        return (
+            fallback.generate(context),
+            fallback.provider_id,
+            fallback.provider_version,
+            f"{type(exc).__name__}: {exc}",
+        )
+
+
+def generate_with_fallback(
+    provider: RewriteProvider,
+    context: RewriteContext,
+    *,
+    cache: RewriteCache | None = None,
+) -> tuple[list[dict], str, str, str | None]:
+    """Use a per-run cache when supplied; otherwise call the provider directly."""
+
+    return cache.generate(provider, context) if cache is not None else _generate_with_fallback(provider, context)

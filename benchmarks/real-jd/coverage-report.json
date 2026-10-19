@@ -1,0 +1,171 @@
+{
+ "aggregate_gap": 0.7604,
+ "corpus_entries": 12,
+ "esco_decision": "adopt_esco_enrichment",
+ "esco_threshold": 0.15,
+ "interpretation": "Miss rates diagnose parser coverage against section-derived lines; they are not human-labelled recall estimates.",
+ "label_source": "rule-derived",
+ "measured_entries": 12,
+ "measurement_status": "heuristic_diagnostic_not_human_validated",
+ "per_jd": [
+  {
+   "corpus_id": "real-greenhouse-01",
+   "expected_requirement_lines": 9,
+   "extracted_requirements": 6,
+   "miss_rate": 0.6667,
+   "missed_expected_lines": 6,
+   "role": "Software Engineer, Intern",
+   "sample_missed": [
+    "Experience from previous internships or other multi-person projects, including open source contributions, that demonstrate evaluating and receiving feedback from mentors, peers, and stakeholders",
+    "Ability to learn unfamiliar systems and form an understanding of those systems, through independent research and working with a mentor and subject matter experts",
+    "One or more areas of specialized knowledge balanced with general skills and knowledge, such as knowing more frontend technologies and, at a high level, how a service handles an HTTP request"
+   ]
+  },
+  {
+   "corpus_id": "real-greenhouse-02",
+   "expected_requirement_lines": 9,
+   "extracted_requirements": 6,
+   "miss_rate": 0.6667,
+   "missed_expected_lines": 6,
+   "role": "Software Engineer, Intern",
+   "sample_missed": [
+    "Experience from previous internships or other multi-person projects, including open source contributions, that demonstrate evaluating and receiving feedback from mentors, peers, and stakeholders",
+    "Ability to learn unfamiliar systems and form an understanding of those systems, through independent research and working with a mentor and subject matter experts",
+    "One or more areas of specialized knowledge balanced with general skills and knowledge, such as knowing more frontend technologies and, at a high level, how a service handles an HTTP request"
+   ]
+  },
+  {
+   "corpus_id": "real-greenhouse-03",
+   "expected_requirement_lines": 3,
+   "extracted_requirements": 2,
+   "miss_rate": 1.0,
+   "missed_expected_lines": 3,
+   "role": "PhD GenAI Research Scientist Intern",
+   "sample_missed": [
+    "Research experience in and proficiency with the fundamentals of deep learning.",
+    "Pursuing a PhD in computer science or related fields (electrical engineering, neuroscience, physics, math, etc.).",
+    "Proficient software engineering skills, including with PyTorch."
+   ]
+  },
+  {
+   "corpus_id": "real-greenhouse-04",
+   "expected_requirement_lines": 8,
+   "extracted_requirements": 9,
+   "miss_rate": 0.75,
+   "missed_expected_lines": 6,
+   "role": "Product Management Intern (Summer 2027)",
+   "sample_missed": [
+    "You've used AI tooling for both personal productivity and development projects",
+    "You're hands-on and learn by doing \u2014 happy to build, test, and iterate your way to an answer",
+    "You use analytical skills to make data-driven decisions (e.g. analyzing product usage)"
+   ]
+  },
+  {
+   "corpus_id": "real-greenhouse-05",
+   "expected_requirement_lines": 5,
+   "extracted_requirements": 5,
+   "miss_rate": 0.6,
+   "missed_expected_lines": 3,
+   "role": "Software Engineering Intern (2027 Start) - Winter",
+   "sample_missed": [
+    "You have good knowledge of algorithms, data structures, and OOP principles",
+    "You are excited to solve ambiguous problems with a collaborative team",
+    "This application is ONLY for Winter 2027 (January-April). Please do not apply if you are looking for Summer or Fall."
+   ]
+  },
+  {
+   "corpus_id": "real-greenhouse-06",
+   "expected_requirement_lines": 17,
+   "extracted_requirements": 5,
+   "miss_rate": 0.8824,
+   "missed_expected_lines": 15,
+   "role": "Software Engineer Intern (Winter 2027)",
+   "sample_missed": [
+    "Experience solving technical problems through school, work, or personal projects",
+    "Are excited to explore how systems are designed and operate, from infrastructure to UI",
+    "Strong communicator who asks great questions, collaborates well with others, and is excited to learn, get feedback, and grow as an engineer"
+   ]
+  },
+  {
+   "corpus_id": "real-greenhouse-07",
+   "expected_requirement_lines": 10,
+   "extracted_requirements": 6,
+   "miss_rate": 0.7,
+   "missed_expected_lines": 7,
+   "role": "Market Research Strategy Intern",
+   "sample_missed": [
+    "Prior experience in college-level consulting, strategy projects, or non-traditional analytical work experience.",
+    "Proven self-starter mindset with the ability to take full ownership of projects and drive results independently with minimal instruction.",
+    "Ability to comfortably navigate ambiguous or incomplete information and synthesize it into clear strategic recommendations."
+   ]
+  },
+  {
+   "corpus_id": "real-greenhouse-08",
+   "expected_requirement_lines": 6,
+   "extracted_requirements": 14,
+   "miss_rate": 0.6667,
+   "missed_expected_lines": 4,
+   "role": "AI Builder Intern",
+   "sample_missed": [
+    "\u2192 Familiarity with at least one agentic or automation framework (LangChain, AutoGen, n8n, Zapier + LLM, etc.)",
+    "\u2192 Strong product instincts \u2014 you think about who will use what you build and why it matters",
+    "\u2192 Able to move fast without breaking things that matter; iterative, scrappy, but deliberate"
+   ]
+  },
+  {
+   "corpus_id": "real-greenhouse-09",
+   "expected_requirement_lines": 3,
+   "extracted_requirements": 2,
+   "miss_rate": 1.0,
+   "missed_expected_lines": 3,
+   "role": "Technical Advisor Specialist (Part-Time Internship) ",
+   "sample_missed": [
+    "Academic Background: Enrolled students in computer science, mathematics, engineering, or a related STEM field.",
+    "Technical Skills: Demonstrated coding proficiency, strong analytical abilities, or experience with competitive math or programming competitions.",
+    "Mindset: Curious, self-motivated, and eager to learn, contribute, and collaborate with like-minded peers and industry experts."
+   ]
+  },
+  {
+   "corpus_id": "real-greenhouse-10",
+   "expected_requirement_lines": 8,
+   "extracted_requirements": 9,
+   "miss_rate": 0.75,
+   "missed_expected_lines": 6,
+   "role": "Account Development Representative Intern - Atlanta",
+   "sample_missed": [
+    "Ability and willingness to make 50 cold calls a day.",
+    "At least 6 months of sales experience and/or sales prospecting ability. This can be sales related coursework, sales competitions, etc.",
+    "Must demonstrate a growth mindset and a willingness to be collaborative with your teammates and in your selling process"
+   ]
+  },
+  {
+   "corpus_id": "real-greenhouse-11",
+   "expected_requirement_lines": 8,
+   "extracted_requirements": 9,
+   "miss_rate": 0.75,
+   "missed_expected_lines": 6,
+   "role": "Account Development Representative Intern - Phoenix",
+   "sample_missed": [
+    "Ability and willingness to make 50 cold calls a day.",
+    "At least 6 months of sales experience and/or sales prospecting ability. This can be sales related coursework, sales competitions, etc.",
+    "Must demonstrate a growth mindset and a willingness to be collaborative with your teammates and in your selling process"
+   ]
+  },
+  {
+   "corpus_id": "real-greenhouse-12",
+   "expected_requirement_lines": 10,
+   "extracted_requirements": 10,
+   "miss_rate": 0.8,
+   "missed_expected_lines": 8,
+   "role": "Software Engineering Internship - London",
+   "sample_missed": [
+    "You want to impact the industries that run our world. The software you build will help keep the lights on, get food into grocery stores, and - most importantly - ensure workers return home safely.",
+    "You want to build for scale. You'll work on technology that powers physical operations at a scale most engineers never experience.",
+    "You believe customers are more than a number. Our engineers are deeply invested in our customers and the daily problems they face. They visit customers in person to understand not just how Samsara helps them today, but where our products need to go next. You\u2019ll participate in customer interviews, collaborate with success and product teams, and use metrics to ensure your work translates into real outcomes."
+   ]
+  }
+ ],
+ "schema_version": 3,
+ "total_expected_lines": 96,
+ "total_missed_lines": 73
+}

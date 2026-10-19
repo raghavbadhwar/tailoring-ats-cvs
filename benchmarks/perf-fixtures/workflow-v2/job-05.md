@@ -1,0 +1,21 @@
+agent tooling analyst
+Experience with testing is preferred for financial reconciliations. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with api is preferred for customer feedback. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with docker is preferred for knowledge search. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with git is preferred for vendor onboarding. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with postgres is preferred for compliance checks. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with supabase is preferred for order routing. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with aws is preferred for quality audits. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with python is preferred for procurement approvals. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with ai agents is preferred for support triage. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with workflow automation is preferred for research intake. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with human-in-the-loop is preferred for contract review. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with retrieval-augmented generation is preferred for inventory exceptions. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with testing is preferred for financial reconciliations. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with api is preferred for customer feedback. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with docker is preferred for knowledge search. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with git is preferred for vendor onboarding. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with postgres is preferred for compliance checks. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with supabase is preferred for order routing. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with aws is preferred for quality audits. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with python is preferred for procurement approvals. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.

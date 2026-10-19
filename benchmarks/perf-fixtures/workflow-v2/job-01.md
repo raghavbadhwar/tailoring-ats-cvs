@@ -1,0 +1,21 @@
+operations improvement associate
+Experience with market research is preferred for service redesign. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with market sizing is preferred for market entry. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with procurement is preferred for cost transformation. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with financial analysis is preferred for operating model review. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with data analysis is preferred for process standardisation. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with excel is preferred for commercial diligence. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with power bi is preferred for delivery governance. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with product requirements is preferred for customer operations. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with workflow automation is preferred for sourcing strategy. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with testing is preferred for performance improvement. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with api is preferred for implementation planning. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with stakeholder management is preferred for supplier consolidation. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with market research is preferred for service redesign. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with market sizing is preferred for market entry. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with procurement is preferred for cost transformation. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with financial analysis is preferred for operating model review. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with data analysis is preferred for process standardisation. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with excel is preferred for commercial diligence. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with power bi is preferred for delivery governance. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with product requirements is preferred for customer operations. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.

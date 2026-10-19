@@ -1,0 +1,21 @@
+technical programme coordinator
+Experience with data analysis is preferred for roadmap governance. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with workflow automation is preferred for launch readiness. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with human-in-the-loop is preferred for adoption analysis. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with testing is preferred for programme controls. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with api is preferred for platform migration. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with excel is preferred for requirements discovery. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with sql is preferred for delivery tracking. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with git is preferred for quality review. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with react is preferred for feedback synthesis. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with product requirements is preferred for feature discovery. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with stakeholder management is preferred for release planning. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with market research is preferred for customer onboarding. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with data analysis is preferred for roadmap governance. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with workflow automation is preferred for launch readiness. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with human-in-the-loop is preferred for adoption analysis. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with testing is preferred for programme controls. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with api is preferred for platform migration. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with excel is preferred for requirements discovery. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with sql is preferred for delivery tracking. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with git is preferred for quality review. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.

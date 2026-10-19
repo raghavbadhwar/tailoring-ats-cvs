@@ -1,0 +1,21 @@
+cloud operations analyst
+Experience with gcp is preferred for access control. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with testing is preferred for deployment validation. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with python is preferred for service integration. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with typescript is preferred for query optimisation. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with javascript is preferred for monitoring automation. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with sql is preferred for schema migration. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with react is preferred for developer tooling. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with next.js is preferred for release checks. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with postgres is preferred for web delivery. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with supabase is preferred for data quality. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with api is preferred for event processing. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with git is preferred for data ingestion. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with docker is preferred for access control. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with kubernetes is preferred for deployment validation. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with aws is preferred for service integration. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with azure is preferred for query optimisation. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with gcp is preferred for monitoring automation. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with testing is preferred for schema migration. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with python is preferred for developer tooling. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
+Experience with typescript is preferred for release checks. The analyst reviews source material, checks assumptions with colleagues, documents the reasoning, and explains the completed work clearly.
