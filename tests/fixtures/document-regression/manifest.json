@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "id": "plain-valid",
+      "path": "plain-valid.txt",
+      "sha256": "37960c6accb62534206be747ad19f2ddbcbabd1d06e1b5563b5ab77c467a7ec3",
+      "kind": "txt",
+      "expected_status": "usable"
+    },
+    {
+      "id": "single-column-valid",
+      "path": "single-column-valid.docx",
+      "sha256": "9336482a75b506232b25afa61365fcf80706a9ebb27c848f0a23fbe3829afd82",
+      "kind": "docx",
+      "expected_status": "usable"
+    },
+    {
+      "id": "malformed-not-docx",
+      "path": "malformed-not-docx.docx",
+      "sha256": "35634c961ee7545e524167467f2240594755925510191f0271f42c8fa9799cb2",
+      "kind": "docx",
+      "expected_status": "blocked"
+    }
+  ]
+}

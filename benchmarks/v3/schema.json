@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/raghavbadhwar/tailoring-ats-cvs/benchmarks/v3/schema.json",
+  "title": "Tailoring ATS CVs Benchmark v3 Case",
+  "type": "object",
+  "required": [
+    "id",
+    "suite",
+    "role_family",
+    "semantic_template"
+  ],
+  "properties": {
+    "id": {"type": "string", "minLength": 1},
+    "suite": {"enum": ["smoke", "public", "adversarial", "documents", "human"]},
+    "role_family": {"type": "string"},
+    "semantic_template": {"type": "string"},
+    "resume": {"type": "string"},
+    "job_description": {"type": "string"},
+    "supporting_evidence": {"type": "string"},
+    "expected_requirements": {"type": "array", "items": {"type": "object"}},
+    "expected_matches": {"type": "array", "items": {"type": "object"}},
+    "expected_hard_gates": {"type": "array", "items": {"type": "object"}},
+    "forbidden_rewrite_terms": {"type": "array", "items": {"type": "string"}},
+    "expected_section": {"type": "string"},
+    "expected_safety": {"enum": ["pass", "blocked"]},
+    "scenario": {"type": "string"},
+    "format": {"enum": ["docx", "pdf", "rtf", "html"]},
+    "fixture": {"type": "string"},
+    "expected_parse": {"type": "boolean"},
+    "outputs": {"type": "object"},
+    "ratings": {"type": ["object", "null"]}
+  },
+  "additionalProperties": true
+}

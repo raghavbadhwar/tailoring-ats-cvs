@@ -1,0 +1,6 @@
+SUMMARY
+Evidence-bound student candidate
+PROJECTS
+- Contributed to a Python workflow with 12 documented checks.
+SKILLS
+Python
