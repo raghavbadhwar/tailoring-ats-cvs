@@ -1,0 +1,28 @@
+{
+  "name": "tailoring-ats-cvs",
+  "version": "1.0.0-beta.3",
+  "description": "CV-first public job discovery and approval-first evidence-grounded CV tailoring.",
+  "author": {
+    "name": "Raghav Badhwar",
+    "url": "https://github.com/raghavbadhwar"
+  },
+  "homepage": "https://github.com/raghavbadhwar/tailoring-ats-cvs",
+  "repository": "https://github.com/raghavbadhwar/tailoring-ats-cvs",
+  "license": "MIT",
+  "keywords": ["career", "cv", "jobs", "resume", "ats"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Career Journey",
+    "shortDescription": "Find suitable jobs and tailor your CV safely.",
+    "longDescription": "Submit a CV, confirm role and location preferences, search public jobs, capture descriptions, and review evidence-grounded CV proposals before any document changes.",
+    "developerName": "Raghav Badhwar",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Write"],
+    "websiteURL": "https://github.com/raghavbadhwar/tailoring-ats-cvs",
+    "defaultPrompt": [
+      "Use my CV to find suitable jobs.",
+      "Find remote roles and prepare CV proposals.",
+      "Review this job and tailor my CV safely."
+    ]
+  }
+}
